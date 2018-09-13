@@ -4,8 +4,7 @@
 #include <stdarg.h>
 
 // snprintf()-like function. Should be mostly C11 compliant, except:
-//  - Does not support the following conversion specifiers: e E g G a A n
-//  - Inaccurate output for the following conversion specifiers: f F
+//  - Does not support the following conversion specifiers: n
 //  - No L length modifier (for long double)
 //  - No l length modifier for the following conversion specifiers: c s
 //    (for wchar_t and related, which is highly unportable anyway)

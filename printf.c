@@ -25,14 +25,23 @@
 //  https://github.com/mpaland/printf
 //  be3047911075b2e917d73451068e0b84373eefb9
 //
+// Float formatting code from: musl, 2de29bc994029b903a366b8a4a9f8c3c3ee2be90
+//  vfprintf.c
+//
 // Modified for use in libinsanity.
 //
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <limits.h>
+#include <inttypes.h>
+#include <math.h>
+#include <float.h>
 
+#include "minmax.h"
 #include "printf.h"
 
 
@@ -45,9 +54,6 @@
 // one converted float number including padded zeros (dynamically created on stack)
 // 32 byte is a good default
 #define PRINTF_FTOA_BUFFER_SIZE    32U
-
-// define this to support floating point (%f)
-#define PRINTF_SUPPORT_FLOAT
 
 // define this to support long long types (%llu or %p)
 #define PRINTF_SUPPORT_LONG_LONG
@@ -215,144 +221,289 @@ static void _ntoa_long_long(struct buf *buffer, unsigned long long value, bool n
 }
 #endif  // PRINTF_SUPPORT_LONG_LONG
 
-
-#if defined(PRINTF_SUPPORT_FLOAT)
-static void _ftoa(struct buf *buffer, double value, unsigned int prec, unsigned int width, unsigned int flags)
+static void out(struct buf *buf, const char *s, size_t l)
 {
-  char buf[PRINTF_FTOA_BUFFER_SIZE];
-  size_t start_idx = buffer->idx;
-  size_t len  = 0U;
-  double diff = 0.0;
-
-  // if input is larger than thres_max, revert to exponential
-  const double thres_max = (double)0x7FFFFFFF;
-
-  // powers of 10
-  static const double pow10[] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000 };
-
-  // test for negative
-  bool negative = false;
-  if (value < 0) {
-    negative = true;
-    value = 0 - value;
-  }
-
-  // set default precision to 6, if not set explicitly
-  if (!(flags & FLAGS_PRECISION)) {
-    prec = 6U;
-  }
-  // limit precision to 9, cause a prec >= 10 can lead to overflow errors
-  while ((len < PRINTF_FTOA_BUFFER_SIZE) && (prec > 9U)) {
-    buf[len++] = '0';
-    prec--;
-  }
-
-  int whole = (int)value;
-  double tmp = (value - whole) * pow10[prec];
-  unsigned long frac = (unsigned long)tmp;
-  diff = tmp - frac;
-
-  if (diff > 0.5) {
-    ++frac;
-    // handle rollover, e.g. case 0.99 with prec 1 is 1.0
-    if (frac >= pow10[prec]) {
-      frac = 0;
-      ++whole;
-    }
-  }
-  else if ((diff == 0.5) && ((frac == 0U) || (frac & 1U))) {
-    // if halfway, round up if odd, OR if last digit is 0
-    ++frac;
-  }
-
-  // TBD: for very large numbers switch back to native sprintf for exponentials. Anyone want to write code to replace this?
-  // Normal printf behavior is to print EVERY whole number digit which can be 100s of characters overflowing your buffers == bad
-  if (value > thres_max) {
-    return;
-  }
-
-  if (prec == 0U) {
-    diff = value - (double)whole;
-    if (diff > 0.5) {
-      // greater than 0.5, round up, e.g. 1.6 -> 2
-      ++whole;
-    }
-    else if ((diff == 0.5) && (whole & 1)) {
-      // exactly 0.5 and ODD, then round up
-      // 1.5 -> 2, but 2.5 -> 2
-      ++whole;
-    }
-  }
-  else {
-    unsigned int count = prec;
-    // now do fractional part, as an unsigned number
-    while (len < PRINTF_FTOA_BUFFER_SIZE) {
-      --count;
-      buf[len++] = (char)(48U + (frac % 10U));
-      if (!(frac /= 10U)) {
-        break;
-      }
-    }
-    // add extra 0s
-    while ((len < PRINTF_FTOA_BUFFER_SIZE) && (count-- > 0U)) {
-      buf[len++] = '0';
-    }
-    if (len < PRINTF_FTOA_BUFFER_SIZE) {
-      // add decimal
-      buf[len++] = '.';
-    }
-  }
-
-  // do whole part, number is reversed
-  while (len < PRINTF_FTOA_BUFFER_SIZE) {
-    buf[len++] = (char)(48 + (whole % 10));
-    if (!(whole /= 10)) {
-      break;
-    }
-  }
-
-  // pad leading zeros
-  while (!(flags & FLAGS_LEFT) && (flags & FLAGS_ZEROPAD) && (len < width) && (len < PRINTF_FTOA_BUFFER_SIZE)) {
-    buf[len++] = '0';
-  }
-
-  // handle sign
-  if ((len == width) && (negative || (flags & FLAGS_PLUS) || (flags & FLAGS_SPACE))) {
-    len--;
-  }
-  if (len < PRINTF_FTOA_BUFFER_SIZE) {
-    if (negative) {
-      buf[len++] = '-';
-    }
-    else if (flags & FLAGS_PLUS) {
-      buf[len++] = '+';  // ignore the space if the '+' exists
-    }
-    else if (flags & FLAGS_SPACE) {
-      buf[len++] = ' ';
-    }
-  }
-
-  // pad spaces up to given width
-  if (!(flags & FLAGS_LEFT) && !(flags & FLAGS_ZEROPAD)) {
-    for (size_t i = len; i < width; i++) {
-      outc(buffer, ' ');
-    }
-  }
-
-  // reverse string
-  for (size_t i = 0U; i < len; i++) {
-    outc(buffer, buf[len - i - 1U]);
-  }
-
-  // append pad spaces up to given width
-  if (flags & FLAGS_LEFT) {
-    while (buffer->idx - start_idx < width) {
-      outc(buffer, ' ');
-    }
-  }
+  while (l--)
+    outc(buf, *s++);
 }
-#endif  // PRINTF_SUPPORT_FLOAT
 
+// Map musl names to the flag constants used here.
+#define ALT_FORM   FLAGS_HASH
+#define ZERO_PAD   FLAGS_ZEROPAD
+#define LEFT_ADJ   FLAGS_LEFT
+#define PAD_POS    FLAGS_SPACE
+#define MARK_POS   FLAGS_PLUS
+
+static void pad(struct buf *f, char c, int w, int l, int fl)
+{
+	char pad[256];
+	if (fl & (LEFT_ADJ | ZERO_PAD) || l >= w) return;
+	l = w - l;
+	memset(pad, c, l>sizeof pad ? sizeof pad : l);
+	for (; l >= sizeof pad; l -= sizeof pad)
+		out(f, pad, sizeof pad);
+	out(f, pad, l);
+}
+
+static const char xdigits[16] = {
+	"0123456789ABCDEF"
+};
+
+static char *fmt_u(uintmax_t x, char *s)
+{
+	unsigned long y;
+	for (   ; x>ULONG_MAX; x/=10) *--s = '0' + x%10;
+	for (y=x;           y; y/=10) *--s = '0' + y%10;
+	return s;
+}
+
+/* Do not override this check. The floating point printing code below
+ * depends on the float.h constants being right. If they are wrong, it
+ * may overflow the stack. */
+#if LDBL_MANT_DIG == 53
+typedef char compiler_defines_long_double_incorrectly[9-(int)sizeof(long double)];
+#endif
+
+static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
+{
+	uint32_t big[(LDBL_MANT_DIG+28)/29 + 1          // mantissa expansion
+		+ (LDBL_MAX_EXP+LDBL_MANT_DIG+28+8)/9]; // exponent expansion
+	uint32_t *a, *d, *r, *z;
+	int e2=0, e, i, j, l;
+	char buf[9+LDBL_MANT_DIG/4], *s;
+	const char *prefix="-0X+0X 0X-0x+0x 0x";
+	int pl;
+	char ebuf0[3*sizeof(int)], *ebuf=&ebuf0[3*sizeof(int)], *estr;
+
+	pl=1;
+	if (signbit(y)) {
+		y=-y;
+	} else if (fl & MARK_POS) {
+		prefix+=3;
+	} else if (fl & PAD_POS) {
+		prefix+=6;
+	} else prefix++, pl=0;
+
+	if (!isfinite(y)) {
+		char *s = (t&32)?"inf":"INF";
+		if (y!=y) s=(t&32)?"nan":"NAN";
+		pad(f, ' ', w, 3+pl, fl&~ZERO_PAD);
+		out(f, prefix, pl);
+		out(f, s, 3);
+		pad(f, ' ', w, 3+pl, fl^LEFT_ADJ);
+		return MAX(w, 3+pl);
+	}
+
+	y = frexpl(y, &e2) * 2;
+	if (y) e2--;
+
+	if ((t|32)=='a') {
+		long double round = 8.0;
+		int re;
+
+		if (t&32) prefix += 9;
+		pl += 2;
+
+		if (p<0 || p>=LDBL_MANT_DIG/4-1) re=0;
+		else re=LDBL_MANT_DIG/4-1-p;
+
+		if (re) {
+			round *= 1<<(LDBL_MANT_DIG%4);
+			while (re--) round*=16;
+			if (*prefix=='-') {
+				y=-y;
+				y-=round;
+				y+=round;
+				y=-y;
+			} else {
+				y+=round;
+				y-=round;
+			}
+		}
+
+		estr=fmt_u(e2<0 ? -e2 : e2, ebuf);
+		if (estr==ebuf) *--estr='0';
+		*--estr = (e2<0 ? '-' : '+');
+		*--estr = t+('p'-'a');
+
+		s=buf;
+		do {
+			int x=y;
+			*s++=xdigits[x]|(t&32);
+			y=16*(y-x);
+			if (s-buf==1 && (y||p>0||(fl&ALT_FORM))) *s++='.';
+		} while (y);
+
+		if (p > INT_MAX-2-(ebuf-estr)-pl)
+			return -1;
+		if (p && s-buf-2 < p)
+			l = (p+2) + (ebuf-estr);
+		else
+			l = (s-buf) + (ebuf-estr);
+
+		pad(f, ' ', w, pl+l, fl);
+		out(f, prefix, pl);
+		pad(f, '0', w, pl+l, fl^ZERO_PAD);
+		out(f, buf, s-buf);
+		pad(f, '0', l-(ebuf-estr)-(s-buf), 0, 0);
+		out(f, estr, ebuf-estr);
+		pad(f, ' ', w, pl+l, fl^LEFT_ADJ);
+		return MAX(w, pl+l);
+	}
+	if (p<0) p=6;
+
+	if (y) y *= 0x1p28, e2-=28;
+
+	if (e2<0) a=r=z=big;
+	else a=r=z=big+sizeof(big)/sizeof(*big) - LDBL_MANT_DIG - 1;
+
+	do {
+		*z = y;
+		y = 1000000000*(y-*z++);
+	} while (y);
+
+	while (e2>0) {
+		uint32_t carry=0;
+		int sh=MIN(29,e2);
+		for (d=z-1; d>=a; d--) {
+			uint64_t x = ((uint64_t)*d<<sh)+carry;
+			*d = x % 1000000000;
+			carry = x / 1000000000;
+		}
+		if (carry) *--a = carry;
+		while (z>a && !z[-1]) z--;
+		e2-=sh;
+	}
+	while (e2<0) {
+		uint32_t carry=0, *b;
+		int sh=MIN(9,-e2), need=1+(p+LDBL_MANT_DIG/3U+8)/9;
+		for (d=a; d<z; d++) {
+			uint32_t rm = *d & (1<<sh)-1;
+			*d = (*d>>sh) + carry;
+			carry = (1000000000>>sh) * rm;
+		}
+		if (!*a) a++;
+		if (carry) *z++ = carry;
+		/* Avoid (slow!) computation past requested precision */
+		b = (t|32)=='f' ? r : a;
+		if (z-b > need) z = b+need;
+		e2+=sh;
+	}
+
+	if (a<z) for (i=10, e=9*(r-a); *a>=i; i*=10, e++);
+	else e=0;
+
+	/* Perform rounding: j is precision after the radix (possibly neg) */
+	j = p - ((t|32)!='f')*e - ((t|32)=='g' && p);
+	if (j < 9*(z-r-1)) {
+		uint32_t x;
+		/* We avoid C's broken division of negative numbers */
+		d = r + 1 + ((j+9*LDBL_MAX_EXP)/9 - LDBL_MAX_EXP);
+		j += 9*LDBL_MAX_EXP;
+		j %= 9;
+		for (i=10, j++; j<9; i*=10, j++);
+		x = *d % i;
+		/* Are there any significant digits past j? */
+		if (x || d+1!=z) {
+			long double round = 2/LDBL_EPSILON;
+			long double small;
+			if ((*d/i & 1) || (i==1000000000 && d>a && (d[-1]&1)))
+				round += 2;
+			if (x<i/2) small=0x0.8p0;
+			else if (x==i/2 && d+1==z) small=0x1.0p0;
+			else small=0x1.8p0;
+			if (pl && *prefix=='-') round*=-1, small*=-1;
+			*d -= x;
+			/* Decide whether to round by probing round+small */
+			if (round+small != round) {
+				*d = *d + i;
+				while (*d > 999999999) {
+					*d--=0;
+					if (d<a) *--a=0;
+					(*d)++;
+				}
+				for (i=10, e=9*(r-a); *a>=i; i*=10, e++);
+			}
+		}
+		if (z>d+1) z=d+1;
+	}
+	for (; z>a && !z[-1]; z--);
+
+	if ((t|32)=='g') {
+		if (!p) p++;
+		if (p>e && e>=-4) {
+			t--;
+			p-=e+1;
+		} else {
+			t-=2;
+			p--;
+		}
+		if (!(fl&ALT_FORM)) {
+			/* Count trailing zeros in last place */
+			if (z>a && z[-1]) for (i=10, j=0; z[-1]%i==0; i*=10, j++);
+			else j=9;
+			if ((t|32)=='f')
+				p = MIN(p,MAX(0,9*(z-r-1)-j));
+			else
+				p = MIN(p,MAX(0,9*(z-r-1)+e-j));
+		}
+	}
+	if (p > INT_MAX-1-(p || (fl&ALT_FORM)))
+		return -1;
+	l = 1 + p + (p || (fl&ALT_FORM));
+	if ((t|32)=='f') {
+		if (e > INT_MAX-l) return -1;
+		if (e>0) l+=e;
+	} else {
+		estr=fmt_u(e<0 ? -e : e, ebuf);
+		while(ebuf-estr<2) *--estr='0';
+		*--estr = (e<0 ? '-' : '+');
+		*--estr = t;
+		if (ebuf-estr > INT_MAX-l) return -1;
+		l += ebuf-estr;
+	}
+
+	if (l > INT_MAX-pl) return -1;
+	pad(f, ' ', w, pl+l, fl);
+	out(f, prefix, pl);
+	pad(f, '0', w, pl+l, fl^ZERO_PAD);
+
+	if ((t|32)=='f') {
+		if (a>r) a=r;
+		for (d=a; d<=r; d++) {
+			char *s = fmt_u(*d, buf+9);
+			if (d!=a) while (s>buf) *--s='0';
+			else if (s==buf+9) *--s='0';
+			out(f, s, buf+9-s);
+		}
+		if (p || (fl&ALT_FORM)) out(f, ".", 1);
+		for (; d<z && p>0; d++, p-=9) {
+			char *s = fmt_u(*d, buf+9);
+			while (s>buf) *--s='0';
+			out(f, s, MIN(9,p));
+		}
+		pad(f, '0', p+9, 9, 0);
+	} else {
+		if (z<=a) z=a+1;
+		for (d=a; d<z && p>=0; d++) {
+			char *s = fmt_u(*d, buf+9);
+			if (s==buf+9) *--s='0';
+			if (d!=a) while (s>buf) *--s='0';
+			else {
+				out(f, s++, 1);
+				if (p>0||(fl&ALT_FORM)) out(f, ".", 1);
+			}
+			out(f, s, MIN(buf+9-s, p));
+			p -= buf+9-s;
+		}
+		pad(f, '0', p+18, 18, 0);
+		out(f, estr, ebuf-estr);
+	}
+
+	pad(f, ' ', w, pl+l, fl^LEFT_ADJ);
+
+	return MAX(w, pl+l);
+}
 
 // internal vsnprintf
 static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
@@ -529,13 +680,18 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
         format++;
         break;
       }
-#if defined(PRINTF_SUPPORT_FLOAT)
       case 'f' :
       case 'F' :
-        _ftoa(buffer, va_arg(va, double), precision, width, flags);
+      case 'g' :
+      case 'G' :
+      case 'a' :
+      case 'A' : {
+        int prec = flags & FLAGS_PRECISION ? (int)precision : -1;
+        if (fmt_fp(buffer, va_arg(va, double), width, prec, flags, *format) < 0)
+          out(buffer, "<error>", 7);
         format++;
         break;
-#endif  // PRINTF_SUPPORT_FLOAT
+      }
       case 'c' : {
         unsigned int l = 1U;
         // pre padding

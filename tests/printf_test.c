@@ -55,9 +55,6 @@
 // enable).
 #define TEST_REDUNDANT_FLAGS 0
 
-// %f
-#define TEST_BUGGY 0
-
 // Implementation defined formatting (%p in particular).
 #define TEST_IMPL_DEFINED 0
 
@@ -363,14 +360,8 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%.2f", 42.8952), "42.90");
     TEST_SNPRINTF(("%.9f", 42.8952), "42.895200000");
     TEST_SNPRINTF(("%.10f", 42.895223), "42.8952230000");
-    #if TEST_BUGGY
-    // this testcase checks, that the precision is truncated to 9 digits.
-    // a perfect working float should return the whole number
-    TEST_SNPRINTF(("%.12f", 42.89522312345678), "42.895223123000");
-    // this testcase checks, that the precision is truncated AND rounded to 9 digits.
-    // a perfect working float should return the whole number
-    TEST_SNPRINTF(("%.12f", 42.89522387654321), "42.895223877000");
-    #endif
+    TEST_SNPRINTF(("%.12f", 42.89522312345678), "42.895223123457");
+    TEST_SNPRINTF(("%.12f", 42.89522387654321), "42.895223876543");
     TEST_SNPRINTF(("%6.2f", 42.8952), " 42.90");
     TEST_SNPRINTF(("%+6.2f", 42.8952), "+42.90");
     TEST_SNPRINTF(("%+5.1f", 42.9252), "+42.9");
@@ -382,10 +373,7 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%.0f", 3.5), "4");
     TEST_SNPRINTF(("%.0f", 3.49), "3");
     TEST_SNPRINTF(("%.1f", 3.49), "3.5");
-    #if TEST_BUGGY
-    // out of range in the moment, need to be fixed by someone
-    TEST_SNPRINTF(("%.1f", 1E20), "");
-    #endif
+    TEST_SNPRINTF(("%.1f", 1E20), "100000000000000000000.0");
     TEST_SNPRINTF(("a%-5.1f", 0.5), "a0.5  ");
     TEST_SNPRINTF(("%i", 0), "0");
     TEST_SNPRINTF(("%i", 1234), "1234");
