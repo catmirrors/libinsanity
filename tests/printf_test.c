@@ -35,6 +35,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <math.h>
+#include <limits.h>
 
 #include "printf.h"
 
@@ -77,12 +78,6 @@
 
 __attribute__((format(printf, 3, 4)))
 typedef int (*snprintf_type)(char *str, size_t size, const char *format, ...);
-
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
-#include <limits.h>
-#include <math.h>
 
 static void run_test(snprintf_type cur_snprintf)
 {
