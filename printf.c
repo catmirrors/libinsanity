@@ -134,11 +134,8 @@ static void _ntoa_format(struct buf *buffer, char* buf, size_t len, bool negativ
         len--;
       }
     }
-    if ((base == 16U) && !(flags & FLAGS_UPPERCASE) && (len < PRINTF_NTOA_BUFFER_SIZE)) {
-      buf[len++] = 'x';
-    }
-    if ((base == 16U) &&  (flags & FLAGS_UPPERCASE) && (len < PRINTF_NTOA_BUFFER_SIZE)) {
-      buf[len++] = 'X';
+    if ((base == 16U) && (len < PRINTF_NTOA_BUFFER_SIZE)) {
+      buf[len++] = flags & FLAGS_UPPERCASE ? 'X' : 'x';
     }
     if (len < PRINTF_NTOA_BUFFER_SIZE) {
       buf[len++] = '0';
