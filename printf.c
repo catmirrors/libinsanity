@@ -684,6 +684,8 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
       case 'F' :
       case 'g' :
       case 'G' :
+      case 'e' :
+      case 'E' :
       case 'a' :
       case 'A' : {
         int prec = flags & FLAGS_PRECISION ? (int)precision : -1;
