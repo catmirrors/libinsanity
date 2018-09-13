@@ -37,6 +37,14 @@
 
 #define REQUIRE(x) assert(x)
 
+#define REQUIRE_STR_EQ(got, expect) do {    \
+    if (strcmp(got, expect)) {              \
+        printf("Got: '%s'\n", got);         \
+        printf("Expected: '%s'\n", expect); \
+    }                                       \
+    assert(!strcmp(got, expect));           \
+} while (0)
+
 // Some tests use redundant format specifier flags (against which gcc warns,
 // and which OS libc will usually not support).
 #define TEST_NON_STANDARD 0
@@ -47,43 +55,35 @@
 // enable).
 #define TEST_REDUNDANT_FLAGS 0
 
+// %f
+#define TEST_BUGGY 0
+
+// Implementation defined formatting (%p in particular).
+#define TEST_IMPL_DEFINED 0
+
 #define EXP(...) __VA_ARGS__
 
-#define TEST_SNPRINTF(args, res) do { \
-    lin_snprintf(buffer, sizeof(buffer), EXP args); \
-    REQUIRE(!strcmp(buffer, res)); \
+#define TEST_SNPRINTF(args, res) do {                   \
+    cur_snprintf(buffer, sizeof(buffer), EXP args);     \
+    REQUIRE_STR_EQ(buffer, res);                        \
 } while (0)
 
-static void vsnprintf_builder_1(char* buffer, int size, ...)
-{
-    va_list args;
-    va_start(args, size);
-    lin_vsnprintf(buffer, size, "%d", args);
-    va_end(args);
-}
+__attribute__((format(printf, 3, 4)))
+typedef int (*snprintf_type)(char *str, size_t size, const char *format, ...);
 
-static void vsnprintf_builder_3(char* buffer, int size, ...)
-{
-    va_list args;
-    va_start(args, size);
-    lin_vsnprintf(buffer, size, "%d %d %s", args);
-    va_end(args);
-}
-
-int main()
+static void run_test(snprintf_type cur_snprintf)
 {
     char buffer[100];
     int ret;
 
     TEST_SNPRINTF(("%d", -1000), "-1000");
-    lin_snprintf(buffer, 3U, "%d", -1000);
-    REQUIRE(!strcmp(buffer, "-1"));
+    cur_snprintf(buffer, 3U, "%d", -1000);
+    REQUIRE_STR_EQ(buffer, "-1");
 
-    vsnprintf_builder_1(buffer, sizeof(buffer), -1);
-    REQUIRE(!strcmp(buffer, "-1"));
+    TEST_SNPRINTF(("%d", -1), "-1");
 
-    vsnprintf_builder_3(buffer, sizeof(buffer), 3, -1000, "test");
-    REQUIRE(!strcmp(buffer, "3 -1000 test"));
+    cur_snprintf(buffer, sizeof(buffer), "%d %d %s", 3, -1000, "test");
+    REQUIRE_STR_EQ(buffer, "3 -1000 test");
 
     TEST_SNPRINTF(("% d", 42), " 42");
     TEST_SNPRINTF(("% d", -42), "-42");
@@ -171,8 +171,8 @@ int main()
     TEST_SNPRINTF(("%0-15d", -42), "-42            ");
     #endif
 
-    lin_snprintf(buffer, sizeof(buffer), "Hello testing");
-    REQUIRE(!strcmp(buffer, "Hello testing"));
+    cur_snprintf(buffer, sizeof(buffer), "Hello testing");
+    REQUIRE_STR_EQ(buffer, "Hello testing");
 
     TEST_SNPRINTF(("%s", "Hello testing"), "Hello testing");
     TEST_SNPRINTF(("%d", 1024), "1024");
@@ -363,12 +363,14 @@ int main()
     TEST_SNPRINTF(("%.2f", 42.8952), "42.90");
     TEST_SNPRINTF(("%.9f", 42.8952), "42.895200000");
     TEST_SNPRINTF(("%.10f", 42.895223), "42.8952230000");
+    #if TEST_BUGGY
     // this testcase checks, that the precision is truncated to 9 digits.
     // a perfect working float should return the whole number
     TEST_SNPRINTF(("%.12f", 42.89522312345678), "42.895223123000");
     // this testcase checks, that the precision is truncated AND rounded to 9 digits.
     // a perfect working float should return the whole number
     TEST_SNPRINTF(("%.12f", 42.89522387654321), "42.895223877000");
+    #endif
     TEST_SNPRINTF(("%6.2f", 42.8952), " 42.90");
     TEST_SNPRINTF(("%+6.2f", 42.8952), "+42.90");
     TEST_SNPRINTF(("%+5.1f", 42.9252), "+42.9");
@@ -380,8 +382,10 @@ int main()
     TEST_SNPRINTF(("%.0f", 3.5), "4");
     TEST_SNPRINTF(("%.0f", 3.49), "3");
     TEST_SNPRINTF(("%.1f", 3.49), "3.5");
+    #if TEST_BUGGY
     // out of range in the moment, need to be fixed by someone
     TEST_SNPRINTF(("%.1f", 1E20), "");
+    #endif
     TEST_SNPRINTF(("%i", 0), "0");
     TEST_SNPRINTF(("%i", 1234), "1234");
     TEST_SNPRINTF(("%i", 32767), "32767");
@@ -422,68 +426,73 @@ int main()
     // TBD
     TEST_SNPRINTF(("%ji", (intmax_t)-2147483647L), "-2147483647");
 
-    lin_snprintf(buffer, sizeof(buffer), "%p", (void*)0x1234U);
+    #if TEST_IMPL_DEFINED
+    cur_snprintf(buffer, sizeof(buffer), "%p", (void*)0x1234U);
     if (sizeof(void*) == 4U) {
-        REQUIRE(!strcmp(buffer, "00001234"));
+        REQUIRE_STR_EQ(buffer, "00001234");
     } else {
-        REQUIRE(!strcmp(buffer, "0000000000001234"));
+        REQUIRE_STR_EQ(buffer, "0000000000001234");
     }
 
-    lin_snprintf(buffer, sizeof(buffer), "%p", (void*)0x12345678U);
+    cur_snprintf(buffer, sizeof(buffer), "%p", (void*)0x12345678U);
     if (sizeof(void*) == 4U) {
-        REQUIRE(!strcmp(buffer, "12345678"));
+        REQUIRE_STR_EQ(buffer, "12345678");
     } else {
-        REQUIRE(!strcmp(buffer, "0000000012345678"));
+        REQUIRE_STR_EQ(buffer, "0000000012345678");
     }
 
-    lin_snprintf(buffer, sizeof(buffer), "%p-%p", (void*)0x12345678U, (void*)0x7EDCBA98U);
+    cur_snprintf(buffer, sizeof(buffer), "%p-%p", (void*)0x12345678U, (void*)0x7EDCBA98U);
     if (sizeof(void*) == 4U) {
-        REQUIRE(!strcmp(buffer, "12345678-7EDCBA98"));
+        REQUIRE_STR_EQ(buffer, "12345678-7EDCBA98");
     } else {
-        REQUIRE(!strcmp(buffer, "0000000012345678-000000007EDCBA98"));
+        REQUIRE_STR_EQ(buffer, "0000000012345678-000000007EDCBA98");
     }
 
     if (sizeof(uintptr_t) == sizeof(uint64_t)) {
-        lin_snprintf(buffer, sizeof(buffer), "%p", (void*)(uintptr_t)0xFFFFFFFFU);
-        REQUIRE(!strcmp(buffer, "00000000FFFFFFFF"));
+        cur_snprintf(buffer, sizeof(buffer), "%p", (void*)(uintptr_t)0xFFFFFFFFU);
+        REQUIRE_STR_EQ(buffer, "00000000FFFFFFFF");
     } else {
-        lin_snprintf(buffer, sizeof(buffer), "%p", (void*)(uintptr_t)0xFFFFFFFFU);
-        REQUIRE(!strcmp(buffer, "FFFFFFFF"));
+        cur_snprintf(buffer, sizeof(buffer), "%p", (void*)(uintptr_t)0xFFFFFFFFU);
+        REQUIRE_STR_EQ(buffer, "FFFFFFFF");
     }
+    #endif
 
-    ret = lin_snprintf(NULL, 10, "%s", "Test");
+    #if TEST_NON_STANDARD
+    // Uh, not sure what's that useful for.
+    ret = cur_snprintf(NULL, 10, "%s", "Test");
     REQUIRE(ret == 4);
-    ret = lin_snprintf(NULL, 0, "%s", "Test");
+    ret = cur_snprintf(NULL, 0, "%s", "Test");
     REQUIRE(ret == 4);
+    #endif
 
     buffer[0] = (char)0xA5;
-    ret = lin_snprintf(buffer, 0, "%s", "Test");
+    ret = cur_snprintf(buffer, 0, "%s", "Test");
     REQUIRE(buffer[0] == (char)0xA5);
     REQUIRE(ret == 4);
 
     buffer[0] = (char)0xCC;
-    lin_snprintf(buffer, 1, "%s", "Test");
+    cur_snprintf(buffer, 1, "%s", "Test");
     REQUIRE(buffer[0] == '\0');
 
-    lin_snprintf(buffer, 2, "%s", "Hello");
-    REQUIRE(!strcmp(buffer, "H"));
+    cur_snprintf(buffer, 2, "%s", "Hello");
+    REQUIRE_STR_EQ(buffer, "H");
 
-    ret = lin_snprintf(buffer, 6, "0%s", "1234");
-    REQUIRE(!strcmp(buffer, "01234"));
+    ret = cur_snprintf(buffer, 6, "0%s", "1234");
+    REQUIRE_STR_EQ(buffer, "01234");
     REQUIRE(ret == 5);
 
-    ret = lin_snprintf(buffer, 6, "0%s", "12345");
-    REQUIRE(!strcmp(buffer, "01234"));
+    ret = cur_snprintf(buffer, 6, "0%s", "12345");
+    REQUIRE_STR_EQ(buffer, "01234");
     REQUIRE(ret == 6);  // '5' is truncated
 
-    ret = lin_snprintf(buffer, 6, "0%s", "1234567");
-    REQUIRE(!strcmp(buffer, "01234"));
+    ret = cur_snprintf(buffer, 6, "0%s", "1234567");
+    REQUIRE_STR_EQ(buffer, "01234");
     REQUIRE(ret == 8);  // '567' are truncated
 
-    ret = lin_snprintf(buffer, 10, "hello, world");
+    ret = cur_snprintf(buffer, 10, "hello, world");
     REQUIRE(ret == 12);
 
-    ret = lin_snprintf(buffer, 3, "%d", 10000);
+    ret = cur_snprintf(buffer, 3, "%d", 10000);
     REQUIRE(ret == 5);
     REQUIRE(strlen(buffer) == 2U);
     REQUIRE(buffer[0] == '1');
@@ -497,5 +506,19 @@ int main()
     TEST_SNPRINTF(("%*sx", -3, "hi"), "hi x");
 
     printf("All tests succeeded.\n");
+}
+
+int main()
+{
+    #if !TEST_NON_STANDARD && !TEST_IMPL_DEFINED
+    printf("Testing system snprintf...\n");
+    run_test(snprintf);
+    #else
+    printf("_Not_ testing system snprintf!\n");
+    #endif
+
+    printf("Testing libinsanity snprintf...\n");
+    run_test(lin_snprintf);
+
     return 0;
 }
