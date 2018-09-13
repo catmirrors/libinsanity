@@ -49,6 +49,14 @@
     assert(!strcmp(got, expect));           \
 } while (0)
 
+#define REQUIRE_INT_EQ(got, expect) do {    \
+    if ((got) != (expect)) {                \
+        printf("Got: %d\n", got);           \
+        printf("Expected: %d\n", expect);   \
+    }                                       \
+    assert((got) == (expect));              \
+} while (0)
+
 // Some tests use redundant format specifier flags (against which gcc warns,
 // and which OS libc will usually not support).
 #define TEST_NON_STANDARD 0
@@ -73,7 +81,7 @@
 // Require that snprintf(..., 0, args) returns res.
 #define TEST_SNPRINTF_N(args, res) do {                 \
     int res_ = cur_snprintf(NULL, 0, EXP args);         \
-    REQUIRE(res == res_);                               \
+    REQUIRE_INT_EQ(res_, res);                          \
 } while (0)
 
 __attribute__((format(printf, 3, 4)))
