@@ -94,13 +94,6 @@ static inline void _out_buffer(char character, void* buffer, size_t idx, size_t 
 }
 
 
-// internal null output
-static inline void _out_null(char character, void* buffer, size_t idx, size_t maxlen)
-{
-  (void)character; (void)buffer; (void)idx; (void)maxlen;
-}
-
-
 // internal test if char is a digit (0-9)
 // \return true if char is a digit
 static inline bool _is_digit(char ch)
@@ -375,11 +368,6 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
 {
   unsigned int flags, width, precision, n;
   size_t idx = 0U;
-
-  if (!buffer) {
-    // use null output function
-    out = _out_null;
-  }
 
   while (*format)
   {

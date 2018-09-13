@@ -457,14 +457,6 @@ static void run_test(snprintf_type cur_snprintf)
     }
     #endif
 
-    #if TEST_NON_STANDARD
-    // Uh, not sure what's that useful for.
-    ret = cur_snprintf(NULL, 10, "%s", "Test");
-    REQUIRE(ret == 4);
-    ret = cur_snprintf(NULL, 0, "%s", "Test");
-    REQUIRE(ret == 4);
-    #endif
-
     buffer[0] = (char)0xA5;
     ret = cur_snprintf(buffer, 0, "%s", "Test");
     REQUIRE(buffer[0] == (char)0xA5);
