@@ -22,16 +22,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// \brief printf unit tests
-//
-///////////////////////////////////////////////////////////////////////////////
+// Additional tests from libc-testsuite (musl)
+// a9baddd7d07b9fe15e212985a808a79773ec72e4
+
 
 #undef NDEBUG
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <math.h>
 
 #include "printf.h"
 
@@ -60,17 +63,30 @@
 
 #define EXP(...) __VA_ARGS__
 
+// Require that printf(args) outputs res.
 #define TEST_SNPRINTF(args, res) do {                   \
     cur_snprintf(buffer, sizeof(buffer), EXP args);     \
     REQUIRE_STR_EQ(buffer, res);                        \
 } while (0)
 
+// Require that snprintf(..., 0, args) returns res.
+#define TEST_SNPRINTF_N(args, res) do {                 \
+    int res_ = cur_snprintf(NULL, 0, EXP args);         \
+    REQUIRE(res == res_);                               \
+} while (0)
+
 __attribute__((format(printf, 3, 4)))
 typedef int (*snprintf_type)(char *str, size_t size, const char *format, ...);
 
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <limits.h>
+#include <math.h>
+
 static void run_test(snprintf_type cur_snprintf)
 {
-    char buffer[100];
+    char buffer[200];
     int ret;
 
     TEST_SNPRINTF(("%d", -1000), "-1000");
@@ -487,6 +503,142 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%.3s", "foobar"), "foo");
     TEST_SNPRINTF(("%10.5d", 4), "     00004");
     TEST_SNPRINTF(("%*sx", -3, "hi"), "hi x");
+
+    // libc-testsuite tests
+
+    /* width, precision, alignment */
+    TEST_SNPRINTF(("%04d", 12), "0012");
+    TEST_SNPRINTF(("%.3d", 12), "012");
+    TEST_SNPRINTF(("%3d", 12), " 12");
+    TEST_SNPRINTF(("%-3d", 12), "12 ");
+    TEST_SNPRINTF(("%+3d", 12), "+12");
+    TEST_SNPRINTF(("%+-5d", 12), "+12  ");
+    #if TEST_REDUNDANT_FLAGS
+    TEST_SNPRINTF(("%+- 5d", 12), "+12  ");
+    #endif
+    TEST_SNPRINTF(("%- 5d", 12), " 12  ");
+    TEST_SNPRINTF(("% d", 12), " 12");
+    #if TEST_REDUNDANT_FLAGS
+    TEST_SNPRINTF(("%0-5d", 12), "12   ");
+    TEST_SNPRINTF(("%-05d", 12), "12   ");
+    #endif
+
+    /* ...explicit precision of 0 shall be no characters. */
+    TEST_SNPRINTF(("%.0d", 0), "");
+    TEST_SNPRINTF(("%.0o", 0), "");
+    #if TEST_REDUNDANT_FLAGS
+    TEST_SNPRINTF(("%#.0d", 0), "");
+    #endif
+    // Note: the original libc-testsuite specifies "" as expected.
+    TEST_SNPRINTF(("%#.0o", 0), "0");
+    // BUG: mpaland doesn't agree.
+    //TEST_SNPRINTF(("%#.0x", 0), "");
+
+    /* ...but it still has to honor width and flags. */
+    TEST_SNPRINTF(("%2.0u", 0), "  ");
+    #if TEST_REDUNDANT_FLAGS
+    // BUG: mpaland disagrees
+    //TEST_SNPRINTF(("%02.0u", 0), "  ");
+    //TEST_SNPRINTF(("%02.0d", 0), "  ");
+    #endif
+    TEST_SNPRINTF(("%2.0d", 0), "  ");
+    // BUG: mpaland crashes.
+    //TEST_SNPRINTF(("% .0d", 0), " ");
+    //TEST_SNPRINTF(("%+.0d", 0), "+");
+
+    /* hex: test alt form and case */
+    TEST_SNPRINTF(("%x", 63), "3f");
+    TEST_SNPRINTF(("%#x", 63), "0x3f");
+    TEST_SNPRINTF(("%X", 63), "3F");
+
+    /* octal: test alt form */
+    TEST_SNPRINTF(("%o", 15), "17");
+    TEST_SNPRINTF(("%#o", 15), "017");
+
+    /* basic form, handling of exponent/precision for 0 */
+    TEST_SNPRINTF(("%e", 0.0), "0.000000e+00");
+    TEST_SNPRINTF(("%f", 0.0), "0.000000");
+    TEST_SNPRINTF(("%g", 0.0), "0");
+    TEST_SNPRINTF(("%#g", 0.0), "0.00000");
+
+    /* rounding */
+    TEST_SNPRINTF(("%f", 1.1), "1.100000");
+    TEST_SNPRINTF(("%f", 1.2), "1.200000");
+    TEST_SNPRINTF(("%f", 1.3), "1.300000");
+    TEST_SNPRINTF(("%f", 1.4), "1.400000");
+    TEST_SNPRINTF(("%f", 1.5), "1.500000");
+    // Note: the original libc-testsuite test specifies "1.0612" as expected.
+    TEST_SNPRINTF(("%.4f", 1.06125), "1.0613");
+    TEST_SNPRINTF(("%.2f", 1.375), "1.38");
+    TEST_SNPRINTF(("%.1f", 1.375), "1.4");
+    TEST_SNPRINTF(("%.15f", 1.1), "1.100000000000000");
+    TEST_SNPRINTF(("%.16f", 1.1), "1.1000000000000001");
+    TEST_SNPRINTF(("%.17f", 1.1), "1.10000000000000009");
+    TEST_SNPRINTF(("%.2e", 1500001.0), "1.50e+06");
+    TEST_SNPRINTF(("%.2e", 1505000.0), "1.50e+06");
+    TEST_SNPRINTF(("%.2e", 1505000.00000095367431640625), "1.51e+06");
+    TEST_SNPRINTF(("%.2e", 1505001.0), "1.51e+06");
+    TEST_SNPRINTF(("%.2e", 1506000.0), "1.51e+06");
+
+    /* correctness in DBL_DIG places */
+    TEST_SNPRINTF(("%.15g", 1.23456789012345), "1.23456789012345");
+
+    /* correct choice of notation for %g */
+    TEST_SNPRINTF(("%g", 0.0001), "0.0001");
+    TEST_SNPRINTF(("%g", 0.00001), "1e-05");
+    TEST_SNPRINTF(("%g", 123456.0), "123456");
+    TEST_SNPRINTF(("%g", 1234567.0), "1.23457e+06");
+    TEST_SNPRINTF(("%.7g", 1234567.0), "1234567");
+    TEST_SNPRINTF(("%.7g", 12345678.0), "1.234568e+07");
+    TEST_SNPRINTF(("%.8g", 0.1), "0.1");
+    TEST_SNPRINTF(("%.9g", 0.1), "0.1");
+    TEST_SNPRINTF(("%.10g", 0.1), "0.1");
+    TEST_SNPRINTF(("%.11g", 0.1), "0.1");
+
+    /* pi in double precision, printed to a few extra places */
+    TEST_SNPRINTF(("%.15f", M_PI), "3.141592653589793");
+    TEST_SNPRINTF(("%.18f", M_PI), "3.141592653589793116");
+
+    /* exact conversion of large integers */
+    TEST_SNPRINTF(("%.0f", 340282366920938463463374607431768211456.0),
+                    "340282366920938463463374607431768211456");
+
+    TEST_SNPRINTF_N(("%d", 123456), 6);
+    TEST_SNPRINTF_N(("%.4s", "hello"), 4);
+    TEST_SNPRINTF_N(("%.0s", "goodbye"), 0);
+
+    {
+        char b[] = "xxxxxxxx";
+        char *s = "%d";
+        int res = snprintf(b, 4, s, 123456);
+        REQUIRE(res == 6);
+        REQUIRE_STR_EQ(b, "123");
+        REQUIRE(b[5] == 'x'); // buffer overrun
+    }
+
+    {
+        char b[2000];
+        /* Perform ascii arithmetic to test printing tiny doubles */
+        int res = snprintf(b, sizeof(b), "%.1022f", 0x1p-1021);
+        REQUIRE(res == 1024);
+        b[1] = '0';
+        int i, k, j;
+        for (i=0; i<1021; i++) {
+            for (k=0, j=1023; j>0; j--) {
+                if (b[j]<'5') b[j]+=b[j]-'0'+k, k=0;
+                else b[j]+=b[j]-'0'-10+k, k=1;
+            }
+        }
+        REQUIRE(b[1] == '1');
+        for (j=2; b[j]=='0'; j++);
+            REQUIRE(j == 1024);
+    }
+
+    // TODO
+    //TEST_SNPRINTF_N(("%.*u", 2147483647, 0), 2147483647);
+    //TEST_SNPRINTF_N(("%.*u ", 2147483647, 0), -1);
+
+    TEST_SNPRINTF_N(("%.4a", 1.0), 11);
 
     printf("All tests succeeded.\n");
 }
