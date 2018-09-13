@@ -386,6 +386,7 @@ static void run_test(snprintf_type cur_snprintf)
     // out of range in the moment, need to be fixed by someone
     TEST_SNPRINTF(("%.1f", 1E20), "");
     #endif
+    TEST_SNPRINTF(("a%-5.1f", 0.5), "a0.5  ");
     TEST_SNPRINTF(("%i", 0), "0");
     TEST_SNPRINTF(("%i", 1234), "1234");
     TEST_SNPRINTF(("%i", 32767), "32767");

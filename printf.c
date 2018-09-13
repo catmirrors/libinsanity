@@ -220,6 +220,7 @@ static void _ntoa_long_long(struct buf *buffer, unsigned long long value, bool n
 static void _ftoa(struct buf *buffer, double value, unsigned int prec, unsigned int width, unsigned int flags)
 {
   char buf[PRINTF_FTOA_BUFFER_SIZE];
+  size_t start_idx = buffer->idx;
   size_t len  = 0U;
   double diff = 0.0;
 
@@ -345,7 +346,7 @@ static void _ftoa(struct buf *buffer, double value, unsigned int prec, unsigned 
 
   // append pad spaces up to given width
   if (flags & FLAGS_LEFT) {
-    while (buffer->idx < width) { // this is a bug
+    while (buffer->idx - start_idx < width) {
       outc(buffer, ' ');
     }
   }
