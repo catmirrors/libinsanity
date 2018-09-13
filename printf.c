@@ -147,7 +147,8 @@ static void _ntoa_format(struct buf *buffer, char* buf, size_t len, bool negativ
 
   // handle sign
   if ((len == width) && (negative || (flags & FLAGS_PLUS) || (flags & FLAGS_SPACE))) {
-    len--;
+    if (len)
+      len--;
   }
   if (len < PRINTF_NTOA_BUFFER_SIZE) {
     if (negative) {

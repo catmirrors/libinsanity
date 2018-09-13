@@ -542,9 +542,8 @@ static void run_test(snprintf_type cur_snprintf)
     //TEST_SNPRINTF(("%02.0d", 0), "  ");
     #endif
     TEST_SNPRINTF(("%2.0d", 0), "  ");
-    // BUG: mpaland crashes.
-    //TEST_SNPRINTF(("% .0d", 0), " ");
-    //TEST_SNPRINTF(("%+.0d", 0), "+");
+    TEST_SNPRINTF(("% .0d", 0), " ");
+    TEST_SNPRINTF(("%+.0d", 0), "+");
 
     /* hex: test alt form and case */
     TEST_SNPRINTF(("%x", 63), "3f");
