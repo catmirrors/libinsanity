@@ -1,0 +1,16 @@
+SRC = ..
+
+all: printf_test strtod_test
+
+runall: all
+	./printf_test
+	./strtod_test
+
+printf_test: printf_test.c $(SRC)/printf.c $(SRC)/printf.h
+	$(CC) -std=c99 -W -Wall -I$(SRC) printf_test.c $(SRC)/printf.c -o printf_test
+
+strtod_test: strtod_test.c $(SRC)/strtod.c $(SRC)/strtod.h $(SRC)/ctype.h
+	$(CC) -std=c99 -W -Wall -I$(SRC) strtod_test.c $(SRC)/strtod.c -lm -o strtod_test
+
+clean:
+	rm -f printf_test strtod_test

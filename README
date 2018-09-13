@@ -1,0 +1,75 @@
+What is it?
+===========
+
+This provides basic helper functions for C. It may include the following
+categories of functions:
+
+a) Portable versions of standard C functions, that can be used as drop-in
+   replacements, with exactly the same semantics, excluding anti-features.
+
+   You can alias these to standard C function names (with preprocessor macros,
+   or even on the linker level).
+
+b) Portable versions of standard C functions, with slightly different semantics,
+   that can be used as drop-in replacements with some care. The semantics can
+   be different to reduce annoying bugs, reduce dependencies and footprint, or
+   because the standard functions are misdesigned.
+
+   Depending on the details, you may alias them to standard function names, but
+   with caveats you have to be aware of.
+
+c) Like a) or b), but portability wrappers for crap OSes like Windows, Android,
+   macOS, iOS, glibc-based Linux, etc.
+
+d) Other helper functions.
+
+Instead of standard C functions, they may be part of other standards, such as
+POSIX.
+
+Currently, only category b) wrappers for (v)snprintf and category a) wrappers
+for strtod are provided.
+
+Uses
+====
+
+- If you use C (or C++) in a library, and functions affected by locale, like
+  snprintf, strtod/strtol, and others, but don't want your library to fucking
+  explode if the library user sets the process locale.
+- Low footprint in bare metal environments or for small static executables
+  (however, the focus is on correctness, not small code size).
+
+How to use
+==========
+
+I don't know, ask your mom? Currently, there are only test programs.
+
+Conventions and rules
+=====================
+
+- Prefix all identifiers with lin_ or LIN_. (Exception: special include files
+  that override standard C functions with
+- Do not use any global mutable state.
+- Do not override standard functions unless the user explicitly asks for it
+  (i.e. don't be gnulib).
+- Do not assume or hardcode implementation details of specific systems. One
+  exception is when a known system requires workarounds for known standard
+  violations. Code should work on arbitrary standard compliant systems.
+- It's not a dumping ground for general utility functions (i.e. don't be glib).
+- Try to reduce general entanglement within the library.
+- No dependencies on broken libc mechanisms or types (such as locales, off_t).
+- Avoid using: errno, stdio, malloc
+
+Name
+====
+
+First I wanted to name it libsanity, because it was supposed to free programmers
+from insane bullshit like global locales, and other extremely harmful things the
+utterly incompetent C standard committees refuses to fix. But then I realized
+this library will go down the drain over the years (if it ever gets to live),
+and also people will disagree with what is considered sane.
+
+License
+=======
+
+GNU Affero General Public License version 3. Most code is sourced from other
+projects and copyrighted by their respective authors and contributors.
