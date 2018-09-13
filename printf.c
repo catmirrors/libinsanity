@@ -781,7 +781,7 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
       buffer->dst[0] = '\0';
 
   // return total number of chars, including the amount outside of the buffer
-  return buffer->idx;
+  return buffer->idx <= INT_MAX ? buffer->idx : -1;
 }
 
 
