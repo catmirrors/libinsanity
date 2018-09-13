@@ -536,9 +536,8 @@ static void run_test(snprintf_type cur_snprintf)
     /* ...but it still has to honor width and flags. */
     TEST_SNPRINTF(("%2.0u", 0), "  ");
     #if TEST_REDUNDANT_FLAGS
-    // BUG: mpaland disagrees
-    //TEST_SNPRINTF(("%02.0u", 0), "  ");
-    //TEST_SNPRINTF(("%02.0d", 0), "  ");
+    TEST_SNPRINTF(("%02.0u", 0), "  ");
+    TEST_SNPRINTF(("%02.0d", 0), "  ");
     #endif
     TEST_SNPRINTF(("%2.0d", 0), "  ");
     TEST_SNPRINTF(("% .0d", 0), " ");

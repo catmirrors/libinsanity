@@ -645,6 +645,11 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
           flags &= ~(FLAGS_PLUS | FLAGS_SPACE);
         }
 
+        // if a precision is specified, the 0 flags is ignored
+        if (flags & FLAGS_PRECISION) {
+          flags &= ~FLAGS_ZEROPAD;
+        }
+
         // convert the integer
         if ((*format == 'i') || (*format == 'd')) {
           // signed
