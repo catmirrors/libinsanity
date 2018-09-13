@@ -73,26 +73,20 @@
 #define FLAGS_PRECISION (1U << 10U)
 #define FLAGS_WIDTH     (1U << 11U)
 
+struct buf {
+    char *dst;
+    char *end;
+    size_t idx;
+};
 
-// output function type
-typedef void (*out_fct_type)(char character, void* buffer, size_t idx, size_t maxlen);
-
-
-// wrapper (used as buffer) for output function type
-typedef struct {
-  void  (*fct)(char character, void* arg);
-  void* arg;
-} out_fct_wrap_type;
-
-
-// internal buffer output
-static inline void _out_buffer(char character, void* buffer, size_t idx, size_t maxlen)
+static void outc(struct buf *buf, char c)
 {
-  if (idx < maxlen) {
-    ((char*)buffer)[idx] = character;
-  }
+    // (We don't write until the very last position; it's reserved for the final
+    // \0. The "double" check avoids theoretical UB if the buffer is empty.)
+    if (buf->dst < buf->end && buf->dst + 1 < buf->end)
+        *buf->dst++ = c;
+    buf->idx++;
 }
-
 
 // internal test if char is a digit (0-9)
 // \return true if char is a digit
@@ -114,9 +108,9 @@ static inline unsigned int _atoi(const char** str)
 
 
 // internal itoa format
-static size_t _ntoa_format(out_fct_type out, char* buffer, size_t idx, size_t maxlen, char* buf, size_t len, bool negative, unsigned int base, unsigned int prec, unsigned int width, unsigned int flags)
+static void _ntoa_format(struct buf *buffer, char* buf, size_t len, bool negative, unsigned int base, unsigned int prec, unsigned int width, unsigned int flags)
 {
-  const size_t start_idx = idx;
+  const size_t start_idx = buffer->idx;
 
   // pad leading zeros
   while (!(flags & FLAGS_LEFT) && (len < prec) && (len < PRINTF_NTOA_BUFFER_SIZE)) {
@@ -164,28 +158,26 @@ static size_t _ntoa_format(out_fct_type out, char* buffer, size_t idx, size_t ma
   // pad spaces up to given width
   if (!(flags & FLAGS_LEFT) && !(flags & FLAGS_ZEROPAD)) {
     for (size_t i = len; i < width; i++) {
-      out(' ', buffer, idx++, maxlen);
+      outc(buffer, ' ');
     }
   }
 
   // reverse string
   for (size_t i = 0U; i < len; i++) {
-    out(buf[len - i - 1U], buffer, idx++, maxlen);
+    outc(buffer, buf[len - i - 1U]);
   }
 
   // append pad spaces up to given width
   if (flags & FLAGS_LEFT) {
-    while (idx - start_idx < width) {
-      out(' ', buffer, idx++, maxlen);
+    while (buffer->idx - start_idx < width) {
+      outc(buffer, ' ');
     }
   }
-
-  return idx;
 }
 
 
 // internal itoa for 'long' type
-static size_t _ntoa_long(out_fct_type out, char* buffer, size_t idx, size_t maxlen, unsigned long value, bool negative, unsigned long base, unsigned int prec, unsigned int width, unsigned int flags)
+static void _ntoa_long(struct buf *buffer, unsigned long value, bool negative, unsigned long base, unsigned int prec, unsigned int width, unsigned int flags)
 {
   char buf[PRINTF_NTOA_BUFFER_SIZE];
   size_t len = 0U;
@@ -199,13 +191,13 @@ static size_t _ntoa_long(out_fct_type out, char* buffer, size_t idx, size_t maxl
     } while (value && (len < PRINTF_NTOA_BUFFER_SIZE));
   }
 
-  return _ntoa_format(out, buffer, idx, maxlen, buf, len, negative, (unsigned int)base, prec, width, flags);
+  _ntoa_format(buffer, buf, len, negative, (unsigned int)base, prec, width, flags);
 }
 
 
 // internal itoa for 'long long' type
 #if defined(PRINTF_SUPPORT_LONG_LONG)
-static size_t _ntoa_long_long(out_fct_type out, char* buffer, size_t idx, size_t maxlen, unsigned long long value, bool negative, unsigned long long base, unsigned int prec, unsigned int width, unsigned int flags)
+static void _ntoa_long_long(struct buf *buffer, unsigned long long value, bool negative, unsigned long long base, unsigned int prec, unsigned int width, unsigned int flags)
 {
   char buf[PRINTF_NTOA_BUFFER_SIZE];
   size_t len = 0U;
@@ -219,13 +211,13 @@ static size_t _ntoa_long_long(out_fct_type out, char* buffer, size_t idx, size_t
     } while (value && (len < PRINTF_NTOA_BUFFER_SIZE));
   }
 
-  return _ntoa_format(out, buffer, idx, maxlen, buf, len, negative, (unsigned int)base, prec, width, flags);
+  _ntoa_format(buffer, buf, len, negative, (unsigned int)base, prec, width, flags);
 }
 #endif  // PRINTF_SUPPORT_LONG_LONG
 
 
 #if defined(PRINTF_SUPPORT_FLOAT)
-static size_t _ftoa(out_fct_type out, char* buffer, size_t idx, size_t maxlen, double value, unsigned int prec, unsigned int width, unsigned int flags)
+static void _ftoa(struct buf *buffer, double value, unsigned int prec, unsigned int width, unsigned int flags)
 {
   char buf[PRINTF_FTOA_BUFFER_SIZE];
   size_t len  = 0U;
@@ -275,7 +267,7 @@ static size_t _ftoa(out_fct_type out, char* buffer, size_t idx, size_t maxlen, d
   // TBD: for very large numbers switch back to native sprintf for exponentials. Anyone want to write code to replace this?
   // Normal printf behavior is to print EVERY whole number digit which can be 100s of characters overflowing your buffers == bad
   if (value > thres_max) {
-    return 0U;
+    return;
   }
 
   if (prec == 0U) {
@@ -342,39 +334,36 @@ static size_t _ftoa(out_fct_type out, char* buffer, size_t idx, size_t maxlen, d
   // pad spaces up to given width
   if (!(flags & FLAGS_LEFT) && !(flags & FLAGS_ZEROPAD)) {
     for (size_t i = len; i < width; i++) {
-      out(' ', buffer, idx++, maxlen);
+      outc(buffer, ' ');
     }
   }
 
   // reverse string
   for (size_t i = 0U; i < len; i++) {
-    out(buf[len - i - 1U], buffer, idx++, maxlen);
+    outc(buffer, buf[len - i - 1U]);
   }
 
   // append pad spaces up to given width
   if (flags & FLAGS_LEFT) {
-    while (idx < width) {
-      out(' ', buffer, idx++, maxlen);
+    while (buffer->idx < width) { // this is a bug
+      outc(buffer, ' ');
     }
   }
-
-  return idx;
 }
 #endif  // PRINTF_SUPPORT_FLOAT
 
 
 // internal vsnprintf
-static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const char* format, va_list va)
+static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
 {
   unsigned int flags, width, precision, n;
-  size_t idx = 0U;
 
   while (*format)
   {
     // format specifier?  %[flags][width][.precision][length]
     if (*format != '%') {
       // no
-      out(*format, buffer, idx++, maxlen);
+      outc(buffer, *format);
       format++;
       continue;
     }
@@ -504,31 +493,31 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
           if (flags & FLAGS_LONG_LONG) {
 #if defined(PRINTF_SUPPORT_LONG_LONG)
             const long long value = va_arg(va, long long);
-            idx = _ntoa_long_long(out, buffer, idx, maxlen, (unsigned long long)(value > 0 ? value : 0 - value), value < 0, base, precision, width, flags);
+            _ntoa_long_long(buffer, (unsigned long long)(value > 0 ? value : 0 - value), value < 0, base, precision, width, flags);
 #endif
           }
           else if (flags & FLAGS_LONG) {
             const long value = va_arg(va, long);
-            idx = _ntoa_long(out, buffer, idx, maxlen, (unsigned long)(value > 0 ? value : 0 - value), value < 0, base, precision, width, flags);
+            _ntoa_long(buffer, (unsigned long)(value > 0 ? value : 0 - value), value < 0, base, precision, width, flags);
           }
           else {
             const int value = (flags & FLAGS_CHAR) ? (char)va_arg(va, int) : (flags & FLAGS_SHORT) ? (short int)va_arg(va, int) : va_arg(va, int);
-            idx = _ntoa_long(out, buffer, idx, maxlen, (unsigned int)(value > 0 ? value : 0 - value), value < 0, base, precision, width, flags);
+            _ntoa_long(buffer, (unsigned int)(value > 0 ? value : 0 - value), value < 0, base, precision, width, flags);
           }
         }
         else {
           // unsigned
           if (flags & FLAGS_LONG_LONG) {
 #if defined(PRINTF_SUPPORT_LONG_LONG)
-            idx = _ntoa_long_long(out, buffer, idx, maxlen, va_arg(va, unsigned long long), false, base, precision, width, flags);
+            _ntoa_long_long(buffer, va_arg(va, unsigned long long), false, base, precision, width, flags);
 #endif
           }
           else if (flags & FLAGS_LONG) {
-            idx = _ntoa_long(out, buffer, idx, maxlen, va_arg(va, unsigned long), false, base, precision, width, flags);
+            _ntoa_long(buffer, va_arg(va, unsigned long), false, base, precision, width, flags);
           }
           else {
             const unsigned int value = (flags & FLAGS_CHAR) ? (unsigned char)va_arg(va, unsigned int) : (flags & FLAGS_SHORT) ? (unsigned short int)va_arg(va, unsigned int) : va_arg(va, unsigned int);
-            idx = _ntoa_long(out, buffer, idx, maxlen, value, false, base, precision, width, flags);
+            _ntoa_long(buffer, value, false, base, precision, width, flags);
           }
         }
         format++;
@@ -537,7 +526,7 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
 #if defined(PRINTF_SUPPORT_FLOAT)
       case 'f' :
       case 'F' :
-        idx = _ftoa(out, buffer, idx, maxlen, va_arg(va, double), precision, width, flags);
+        _ftoa(buffer, va_arg(va, double), precision, width, flags);
         format++;
         break;
 #endif  // PRINTF_SUPPORT_FLOAT
@@ -546,15 +535,15 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
         // pre padding
         if (!(flags & FLAGS_LEFT)) {
           while (l++ < width) {
-            out(' ', buffer, idx++, maxlen);
+            outc(buffer, ' ');
           }
         }
         // char output
-        out((char)va_arg(va, int), buffer, idx++, maxlen);
+        outc(buffer, (char)va_arg(va, int));
         // post padding
         if (flags & FLAGS_LEFT) {
           while (l++ < width) {
-            out(' ', buffer, idx++, maxlen);
+            outc(buffer, ' ');
           }
         }
         format++;
@@ -570,17 +559,17 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
         }
         if (!(flags & FLAGS_LEFT)) {
           while (l++ < width) {
-            out(' ', buffer, idx++, maxlen);
+            outc(buffer, ' ');
           }
         }
         // string output
         while ((*p != 0) && (!(flags & FLAGS_PRECISION) || precision--)) {
-          out(*(p++), buffer, idx++, maxlen);
+          outc(buffer, *(p++));
         }
         // post padding
         if (flags & FLAGS_LEFT) {
           while (l++ < width) {
-            out(' ', buffer, idx++, maxlen);
+            outc(buffer, ' ');
           }
         }
         format++;
@@ -593,11 +582,11 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
 #if defined(PRINTF_SUPPORT_LONG_LONG)
         const bool is_ll = sizeof(uintptr_t) == sizeof(long long);
         if (is_ll) {
-          idx = _ntoa_long_long(out, buffer, idx, maxlen, (uintptr_t)va_arg(va, void*), false, 16U, precision, width, flags);
+          _ntoa_long_long(buffer, (uintptr_t)va_arg(va, void*), false, 16U, precision, width, flags);
         }
         else {
 #endif
-          idx = _ntoa_long(out, buffer, idx, maxlen, (unsigned long)((uintptr_t)va_arg(va, void*)), false, 16U, precision, width, flags);
+          _ntoa_long(buffer, (unsigned long)((uintptr_t)va_arg(va, void*)), false, 16U, precision, width, flags);
 #if defined(PRINTF_SUPPORT_LONG_LONG)
         }
 #endif
@@ -606,22 +595,23 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
       }
 
       case '%' :
-        out('%', buffer, idx++, maxlen);
+        outc(buffer, '%');
         format++;
         break;
 
       default :
-        out(*format, buffer, idx++, maxlen);
+        outc(buffer, *format);
         format++;
         break;
     }
   }
 
   // termination
-  out((char)0, buffer, idx < maxlen ? idx : maxlen - 1U, maxlen);
+  if (buffer->dst < buffer->end)
+      buffer->dst[0] = '\0';
 
-  // return written chars without terminating \0
-  return (int)idx;
+  // return total number of chars, including the amount outside of the buffer
+  return buffer->idx;
 }
 
 
@@ -631,12 +621,17 @@ int lin_snprintf(char* buffer, size_t count, const char* format, ...)
 {
   va_list va;
   va_start(va, format);
-  const int ret = _vsnprintf(_out_buffer, buffer, count, format, va);
+  int ret = lin_vsnprintf(buffer, count, format, va);
   va_end(va);
   return ret;
 }
 
 int lin_vsnprintf(char* buffer, size_t count, const char* format, va_list va)
 {
-  return _vsnprintf(_out_buffer, buffer, count, format, va);
+  struct buf buf = {
+    .dst = buffer,
+    .end = buffer + count,
+  };
+
+  return _vsnprintf(&buf, format, va);
 }
