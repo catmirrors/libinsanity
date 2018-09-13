@@ -531,8 +531,7 @@ static void run_test(snprintf_type cur_snprintf)
     #endif
     // Note: the original libc-testsuite specifies "" as expected.
     TEST_SNPRINTF(("%#.0o", 0), "0");
-    // BUG: mpaland doesn't agree.
-    //TEST_SNPRINTF(("%#.0x", 0), "");
+    TEST_SNPRINTF(("%#.0x", 0), "");
 
     /* ...but it still has to honor width and flags. */
     TEST_SNPRINTF(("%2.0u", 0), "  ");

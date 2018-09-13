@@ -140,6 +140,9 @@ static void _ntoa_format(struct buf *buffer, char* buf, size_t len, bool negativ
     if (len < PRINTF_NTOA_BUFFER_SIZE) {
       buf[len++] = '0';
     }
+    if (!prec && flags & FLAGS_PRECISION && base == 16U && len >= 2) {
+      len -= 2;
+    }
   }
 
   // handle sign
