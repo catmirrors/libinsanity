@@ -558,7 +558,7 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
 
       case 's' : {
         char* p = va_arg(va, char*);
-        unsigned int l = strlen(p);
+        size_t l = strlen(p);
         // pre padding
         if (flags & FLAGS_PRECISION) {
           l = (l < precision ? l : precision);
