@@ -47,7 +47,9 @@ Conventions and rules
 =====================
 
 - Prefix all identifiers with lin_ or LIN_. (Exception: special include files
-  that override standard C functions with
+  that override standard C functions with category a) portable replacements,
+  or macro-only identifiers in include files that specifically make non-prefixed
+  identifiers visible.)
 - Do not use any global mutable state.
 - Do not override standard functions unless the user explicitly asks for it
   (i.e. don't be gnulib).
