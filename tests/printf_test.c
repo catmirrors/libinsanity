@@ -427,6 +427,8 @@ static void run_test(snprintf_type cur_snprintf)
     // TBD
     TEST_SNPRINTF(("%ji", (intmax_t)-2147483647L), "-2147483647");
 
+    TEST_SNPRINTF(("%.*d", -1, 1), "1");
+
     #if TEST_IMPL_DEFINED
     cur_snprintf(buffer, sizeof(buffer), "%p", (void*)0x1234U);
     if (sizeof(void*) == 4U) {

@@ -412,7 +412,12 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
         precision = _atoi(&format);
       }
       else if (*format == '*') {
-        precision = (unsigned int)va_arg(va, int);
+        int prec = va_arg(va, int);
+        if (prec >= 0) {
+          precision = prec;
+        } else {
+          flags &= ~FLAGS_PRECISION;
+        }
         format++;
       }
     }
