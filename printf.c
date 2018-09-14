@@ -50,18 +50,6 @@
 // 32 byte is a good default
 #define PRINTF_NTOA_BUFFER_SIZE    32U
 
-// ftoa conversion buffer size, this must be big enough to hold
-// one converted float number including padded zeros (dynamically created on stack)
-// 32 byte is a good default
-#define PRINTF_FTOA_BUFFER_SIZE    32U
-
-// define this to support long long types (%llu or %p)
-#define PRINTF_SUPPORT_LONG_LONG
-
-// define this to support the ptrdiff_t type (%t)
-// ptrdiff_t is normally defined in <stddef.h> as long or long long type
-#define PRINTF_SUPPORT_PTRDIFF_T
-
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -201,7 +189,6 @@ static void _ntoa_long(struct buf *buffer, unsigned long value, bool negative, u
 
 
 // internal itoa for 'long long' type
-#if defined(PRINTF_SUPPORT_LONG_LONG)
 static void _ntoa_long_long(struct buf *buffer, unsigned long long value, bool negative, unsigned long long base, unsigned int prec, unsigned int width, unsigned int flags)
 {
   char buf[PRINTF_NTOA_BUFFER_SIZE];
@@ -218,7 +205,6 @@ static void _ntoa_long_long(struct buf *buffer, unsigned long long value, bool n
 
   _ntoa_format(buffer, buf, len, negative, (unsigned int)base, prec, width, flags);
 }
-#endif  // PRINTF_SUPPORT_LONG_LONG
 
 static void out(struct buf *buf, const char *s, size_t l)
 {
@@ -590,12 +576,10 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
           format++;
         }
         break;
-#if defined(PRINTF_SUPPORT_PTRDIFF_T)
       case 't' :
         flags |= (sizeof(ptrdiff_t) == sizeof(long) ? FLAGS_LONG : FLAGS_LONG_LONG);
         format++;
         break;
-#endif
       case 'j' :
         flags |= (sizeof(intmax_t) == sizeof(long) ? FLAGS_LONG : FLAGS_LONG_LONG);
         format++;
@@ -652,10 +636,8 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
         if ((*format == 'i') || (*format == 'd')) {
           // signed
           if (flags & FLAGS_LONG_LONG) {
-#if defined(PRINTF_SUPPORT_LONG_LONG)
             const long long value = va_arg(va, long long);
             _ntoa_long_long(buffer, (unsigned long long)(value > 0 ? value : 0 - value), value < 0, base, precision, width, flags);
-#endif
           }
           else if (flags & FLAGS_LONG) {
             const long value = va_arg(va, long);
@@ -669,9 +651,7 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
         else {
           // unsigned
           if (flags & FLAGS_LONG_LONG) {
-#if defined(PRINTF_SUPPORT_LONG_LONG)
             _ntoa_long_long(buffer, va_arg(va, unsigned long long), false, base, precision, width, flags);
-#endif
           }
           else if (flags & FLAGS_LONG) {
             _ntoa_long(buffer, va_arg(va, unsigned long), false, base, precision, width, flags);
@@ -747,17 +727,13 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
       case 'p' : {
         width = sizeof(void*) * 2U;
         flags |= FLAGS_ZEROPAD | FLAGS_UPPERCASE;
-#if defined(PRINTF_SUPPORT_LONG_LONG)
         const bool is_ll = sizeof(uintptr_t) == sizeof(long long);
         if (is_ll) {
           _ntoa_long_long(buffer, (uintptr_t)va_arg(va, void*), false, 16U, precision, width, flags);
         }
         else {
-#endif
           _ntoa_long(buffer, (unsigned long)((uintptr_t)va_arg(va, void*)), false, 16U, precision, width, flags);
-#if defined(PRINTF_SUPPORT_LONG_LONG)
         }
-#endif
         format++;
         break;
       }
