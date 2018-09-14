@@ -87,9 +87,7 @@ struct buf {
 
 static void outc(struct buf *buf, char c)
 {
-    // (We don't write until the very last position; it's reserved for the final
-    // \0. The "double" check avoids theoretical UB if the buffer is empty.)
-    if (buf->dst < buf->end && buf->dst + 1 < buf->end)
+    if (buf->dst < buf->end)
         *buf->dst++ = c;
     buf->idx++;
 }
@@ -776,10 +774,6 @@ static int _vsnprintf(struct buf *buffer, const char* format, va_list va)
     }
   }
 
-  // termination
-  if (buffer->dst < buffer->end)
-      buffer->dst[0] = '\0';
-
   // return total number of chars, including the amount outside of the buffer
   return buffer->idx <= INT_MAX ? buffer->idx : -1;
 }
@@ -800,8 +794,15 @@ int lin_vsnprintf(char* buffer, size_t count, const char* format, va_list va)
 {
   struct buf buf = {
     .dst = buffer,
-    .end = buffer + count,
+    // (Always reserve 1 byte for the \0 if there's space.)
+    .end = count ? buffer + count - 1 : buffer,
   };
 
-  return _vsnprintf(&buf, format, va);
+  int res = _vsnprintf(&buf, format, va);
+
+  // termination
+  if (count)
+    buf.dst[0] = '\0';
+
+  return res;
 }
