@@ -33,15 +33,20 @@ Uses
 ====
 
 - If you use C (or C++) in a library, and functions affected by locale, like
-  snprintf, strtod/strtol, and others, but don't want your library to fucking
-  explode if the library user sets the process locale.
+  snprintf, strtod/strtol, and others, but don't want your library to
+  malfunction randomly if the library user sets the process locale. (In these
+  cases, it will depend on your user's locale settings if you use system libc
+  functions.) Since you do not have control over this, replacing standard
+  functions with mostly equivalent, but locale agnostic functions is the only
+  reliable solution. Note that sometimes not even library users have control
+  over this, since other libraries or plugins sometimes set locale.
 - Low footprint in bare metal environments or for small static executables
   (however, the focus is on correctness, not small code size).
 
 How to use
 ==========
 
-I don't know, ask your mom? Currently, there are only test programs.
+Currently, there are only test programs.
 
 Conventions and rules
 =====================
@@ -65,13 +70,10 @@ Name
 ====
 
 First I wanted to name it libsanity, because it was supposed to free programmers
-from insane bullshit like global locales, and other extremely harmful things the
-utterly incompetent C standard committees refuses to fix. But then I realized
-this library will go down the drain over the years (if it ever gets to live),
-and also people will disagree with what is considered sane.
+from insanity like global locales. As a playful joke, it was named libinsanity.
 
 License
 =======
 
-GNU Affero General Public License version 3. Most code is sourced from other
+GNU ****** General Public License version 3. Most code is sourced from other
 projects and copyrighted by their respective authors and contributors.
