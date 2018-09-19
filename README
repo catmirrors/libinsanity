@@ -32,14 +32,16 @@ for strtod are provided.
 Uses
 ====
 
-- If you use C (or C++) in a library, and functions affected by locale, like
-  snprintf, strtod/strtol, and others, but don't want your library to
-  malfunction randomly if the library user sets the process locale. (In these
-  cases, it will depend on your user's locale settings if you use system libc
-  functions.) Since you do not have control over this, replacing standard
-  functions with mostly equivalent, but locale agnostic functions is the only
-  reliable solution. Note that sometimes not even library users have control
-  over this, since other libraries or plugins sometimes set locale.
+- If your library uses libc functions affected by locale, like snprintf,
+  strtod/strtol etc., but don't want your library to malfunction randomly if the
+  library user sets the process locale. (The exact behavior of these libc
+  functions will depend on your user's locale settings, usually the last thing
+  you think about when analyzing bug reports.)
+  Since you do not have control over this, replacing standard functions with
+  mostly equivalent, but locale agnostic functions is the only reliable
+  solution. Note that sometimes not even library users have control over this,
+  since other libraries or plugins sometimes set locale.
+- Ensuring true portability.
 - Low footprint in bare metal environments or for small static executables
   (however, the focus is on correctness, not small code size).
 
@@ -71,6 +73,25 @@ Name
 
 First I wanted to name it libsanity, because it was supposed to free programmers
 from insanity like global locales. As a playful joke, it was named libinsanity.
+
+Alternative solutions
+=====================
+
+You can just work around the traps set by these standard functions every time.
+This library is supposed to spare you from this.
+
+In the case of locale dependent functions, you could temporarily override the
+current thread's uselocale(). But this is very inconvenient (you will likely
+create wrappers anyway), and not available on all systems. On that note,
+uselocale() is truly a bogus solution top the global locale problem. It's
+literally the wrong way around, and per-thread state either requires pushing and
+popping the state every time, or explicitly constraining code to dedicated
+threads, both sub-optimal solutions for a problem that is purely created by the
+standard committees.
+
+You can use languages which have their own implementations of the same
+mechanisms. So they will reimplement libc code or use any of the above
+workarounds. Same difference if you reimplement it in a dedicated library.
 
 License
 =======
