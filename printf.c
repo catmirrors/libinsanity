@@ -207,17 +207,10 @@ static void _ntoa_long_long(struct buf *buffer, unsigned long long value,
                  prec, width, flags);
 }
 
-// Map musl names to the flag constants used here.
-#define ALT_FORM   FLAGS_HASH
-#define ZERO_PAD   FLAGS_ZEROPAD
-#define LEFT_ADJ   FLAGS_LEFT
-#define PAD_POS    FLAGS_SPACE
-#define MARK_POS   FLAGS_PLUS
-
 static void pad(struct buf *f, char c, int w, int l, int fl)
 {
     char pad[256];
-    if (fl & (LEFT_ADJ | ZERO_PAD) || l >= w)
+    if (fl & (FLAGS_LEFT | FLAGS_ZEROPAD) || l >= w)
         return;
     l = w - l;
     memset(pad, c, l > sizeof pad ? sizeof pad : l);
@@ -259,9 +252,9 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
     pl = 1;
     if (signbit(y)) {
         y = -y;
-    } else if (fl & MARK_POS) {
+    } else if (fl & FLAGS_PLUS) {
         prefix += 3;
-    } else if (fl & PAD_POS) {
+    } else if (fl & FLAGS_SPACE) {
         prefix += 6;
     } else {
         prefix++, pl = 0;
@@ -271,10 +264,10 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
         char *s = (t & 32) ? "inf" : "INF";
         if (y != y)
             s = (t & 32) ? "nan" : "NAN";
-        pad(f, ' ', w, 3 + pl, fl & ~ZERO_PAD);
+        pad(f, ' ', w, 3 + pl, fl & ~FLAGS_ZEROPAD);
         out(f, prefix, pl);
         out(f, s, 3);
-        pad(f, ' ', w, 3 + pl, fl ^ LEFT_ADJ);
+        pad(f, ' ', w, 3 + pl, fl ^ FLAGS_LEFT);
         return MAX(w, 3 + pl);
     }
 
@@ -321,7 +314,7 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
             int x = y;
             *s++ = xdigits[x] | (t & 32);
             y = 16 * (y - x);
-            if (s - buf == 1 && (y || p > 0 || (fl & ALT_FORM)))
+            if (s - buf == 1 && (y || p > 0 || (fl & FLAGS_HASH)))
                 *s++ = '.';
         } while (y);
 
@@ -334,11 +327,11 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
 
         pad(f, ' ', w, pl + l, fl);
         out(f, prefix, pl);
-        pad(f, '0', w, pl + l, fl ^ ZERO_PAD);
+        pad(f, '0', w, pl + l, fl ^ FLAGS_ZEROPAD);
         out(f, buf, s - buf);
         pad(f, '0', l - (ebuf - estr) - (s - buf), 0, 0);
         out(f, estr, ebuf - estr);
-        pad(f, ' ', w, pl + l, fl ^ LEFT_ADJ);
+        pad(f, ' ', w, pl + l, fl ^ FLAGS_LEFT);
         return MAX(w, pl + l);
     }
     if (p < 0)
@@ -455,7 +448,7 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
             t -= 2;
             p--;
         }
-        if (!(fl & ALT_FORM)) {
+        if (!(fl & FLAGS_HASH)) {
             /* Count trailing zeros in last place */
             if (z > a && z[-1]) {
                 for (i = 10, j = 0; z[-1] % i == 0; i *= 10, j++);
@@ -469,9 +462,9 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
             }
         }
     }
-    if (p > INT_MAX - 1 - (p || (fl & ALT_FORM)))
+    if (p > INT_MAX - 1 - (p || (fl & FLAGS_HASH)))
         return -1;
-    l = 1 + p + (p || (fl & ALT_FORM));
+    l = 1 + p + (p || (fl & FLAGS_HASH));
     if ((t | 32) == 'f') {
         if (e > INT_MAX - l)
             return -1;
@@ -492,7 +485,7 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
         return -1;
     pad(f, ' ', w, pl + l, fl);
     out(f, prefix, pl);
-    pad(f, '0', w, pl + l, fl ^ ZERO_PAD);
+    pad(f, '0', w, pl + l, fl ^ FLAGS_ZEROPAD);
 
     if ((t | 32) == 'f') {
         if (a > r)
@@ -507,7 +500,7 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
             }
             out(f, s, buf + 9 - s);
         }
-        if (p || (fl & ALT_FORM))
+        if (p || (fl & FLAGS_HASH))
             out(f, ".", 1);
         for (; d < z && p > 0; d++, p -= 9) {
             char *s = fmt_u(*d, buf + 9);
@@ -528,7 +521,7 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
                     *--s = '0';
             } else {
                 out(f, s++, 1);
-                if (p > 0 || (fl & ALT_FORM))
+                if (p > 0 || (fl & FLAGS_HASH))
                     out(f, ".", 1);
             }
             out(f, s, MIN(buf + 9 - s, p));
@@ -538,7 +531,7 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
         out(f, estr, ebuf - estr);
     }
 
-    pad(f, ' ', w, pl + l, fl ^ LEFT_ADJ);
+    pad(f, ' ', w, pl + l, fl ^ FLAGS_LEFT);
 
     return MAX(w, pl + l);
 }
