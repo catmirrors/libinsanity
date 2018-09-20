@@ -1,8 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////////
-// \author (c) Marco Paland (info@paland.com)
-//             2017-2018, PALANDesign Hannover, Germany
+// (c) Marco Paland (info@paland.com)
+//     2017-2018, PALANDesign Hannover, Germany
 //
-// \license The MIT License (MIT)
+// The MIT License (MIT)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -10,10 +10,10 @@
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -246,7 +246,7 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%*x", 20, 3989525555U), "            edcb5433");
     TEST_SNPRINTF(("%*X", 20, 305441741), "            1234ABCD");
     TEST_SNPRINTF(("%*X", 20, 3989525555U), "            EDCB5433");
-    TEST_SNPRINTF(("%*c", 20,'x'), "                   x");
+    TEST_SNPRINTF(("%*c", 20, 'x'), "                   x");
     TEST_SNPRINTF(("%-20s", "Hello"), "Hello               ");
     TEST_SNPRINTF(("%-20d", 1024), "1024                ");
     TEST_SNPRINTF(("%-20d", -1024), "-1024               ");
@@ -264,8 +264,10 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%-20c", 'x'), "x                   ");
     TEST_SNPRINTF(("|%5d| |%-2d| |%5d|", 9, 9, 9), "|    9| |9 | |    9|");
     TEST_SNPRINTF(("|%5d| |%-2d| |%5d|", 10, 10, 10), "|   10| |10| |   10|");
-    TEST_SNPRINTF(("|%5d| |%-12d| |%5d|", 9, 9, 9), "|    9| |9           | |    9|");
-    TEST_SNPRINTF(("|%5d| |%-12d| |%5d|", 10, 10, 10), "|   10| |10          | |   10|");
+    TEST_SNPRINTF(("|%5d| |%-12d| |%5d|", 9, 9, 9),
+                  "|    9| |9           | |    9|");
+    TEST_SNPRINTF(("|%5d| |%-12d| |%5d|", 10, 10, 10),
+                  "|   10| |10          | |   10|");
     #if TEST_REDUNDANT_FLAGS
     TEST_SNPRINTF(("%0-20s", "Hello"), "Hello               ");
     TEST_SNPRINTF(("%0-20d", 1024), "1024                ");
@@ -366,8 +368,10 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%20.0o", 4294966785U), "         37777777001");
     TEST_SNPRINTF(("%20.o", 0U), "                    ");
     TEST_SNPRINTF(("%20.x", 305441741), "            1234abcd");
-    TEST_SNPRINTF(("%50.x", 305441741), "                                          1234abcd");
-    TEST_SNPRINTF(("%50.x%10.u", 305441741, 12345), "                                          1234abcd     12345");
+    TEST_SNPRINTF(("%50.x", 305441741),
+                  "                                          1234abcd");
+    TEST_SNPRINTF(("%50.x%10.u", 305441741, 12345),
+                  "                                          1234abcd     12345");
     TEST_SNPRINTF(("%20.0x", 3989525555U), "            edcb5433");
     TEST_SNPRINTF(("%20.x", 0U), "                    ");
     TEST_SNPRINTF(("%20.X", 305441741), "            1234ABCD");
@@ -437,32 +441,32 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%.*d", -1, 1), "1");
 
     #if TEST_IMPL_DEFINED
-    cur_snprintf(buffer, sizeof(buffer), "%p", (void*)0x1234U);
-    if (sizeof(void*) == 4U) {
+    cur_snprintf(buffer, sizeof(buffer), "%p", (void *)0x1234U);
+    if (sizeof(void *) == 4U)
         REQUIRE_STR_EQ(buffer, "00001234");
-    } else {
+    else
         REQUIRE_STR_EQ(buffer, "0000000000001234");
-    }
 
-    cur_snprintf(buffer, sizeof(buffer), "%p", (void*)0x12345678U);
-    if (sizeof(void*) == 4U) {
+    cur_snprintf(buffer, sizeof(buffer), "%p", (void *)0x12345678U);
+    if (sizeof(void *) == 4U)
         REQUIRE_STR_EQ(buffer, "12345678");
-    } else {
+    else
         REQUIRE_STR_EQ(buffer, "0000000012345678");
-    }
 
-    cur_snprintf(buffer, sizeof(buffer), "%p-%p", (void*)0x12345678U, (void*)0x7EDCBA98U);
-    if (sizeof(void*) == 4U) {
+    cur_snprintf(buffer, sizeof(buffer), "%p-%p", (void *)0x12345678U,
+                 (void *)0x7EDCBA98U);
+    if (sizeof(void *) == 4U)
         REQUIRE_STR_EQ(buffer, "12345678-7EDCBA98");
-    } else {
+    else
         REQUIRE_STR_EQ(buffer, "0000000012345678-000000007EDCBA98");
-    }
 
     if (sizeof(uintptr_t) == sizeof(uint64_t)) {
-        cur_snprintf(buffer, sizeof(buffer), "%p", (void*)(uintptr_t)0xFFFFFFFFU);
+        cur_snprintf(buffer, sizeof(buffer), "%p",
+                     (void *)(uintptr_t)0xFFFFFFFFU);
         REQUIRE_STR_EQ(buffer, "00000000FFFFFFFF");
     } else {
-        cur_snprintf(buffer, sizeof(buffer), "%p", (void*)(uintptr_t)0xFFFFFFFFU);
+        cur_snprintf(buffer, sizeof(buffer), "%p",
+                     (void *)(uintptr_t)0xFFFFFFFFU);
         REQUIRE_STR_EQ(buffer, "FFFFFFFF");
     }
     #endif
@@ -501,7 +505,8 @@ static void run_test(snprintf_type cur_snprintf)
     REQUIRE(buffer[1] == '0');
     REQUIRE(buffer[2] == '\0');
 
-    TEST_SNPRINTF(("%u%u%ctest%d %s", 5, 3000, 'a', -20, "bit"), "53000atest-20 bit");
+    TEST_SNPRINTF(("%u%u%ctest%d %s", 5, 3000, 'a', -20, "bit"),
+                  "53000atest-20 bit");
     TEST_SNPRINTF(("%.*f", 2, 0.33333333), "0.33");
     TEST_SNPRINTF(("%.3s", "foobar"), "foo");
     TEST_SNPRINTF(("%10.5d", 4), "     00004");
@@ -601,7 +606,7 @@ static void run_test(snprintf_type cur_snprintf)
 
     /* exact conversion of large integers */
     TEST_SNPRINTF(("%.0f", 340282366920938463463374607431768211456.0),
-                    "340282366920938463463374607431768211456");
+                  "340282366920938463463374607431768211456");
 
     TEST_SNPRINTF_N(("%d", 123456), 6);
     TEST_SNPRINTF_N(("%.4s", "hello"), 4);
@@ -623,15 +628,17 @@ static void run_test(snprintf_type cur_snprintf)
         REQUIRE(res == 1024);
         b[1] = '0';
         int i, k, j;
-        for (i=0; i<1021; i++) {
-            for (k=0, j=1023; j>0; j--) {
-                if (b[j]<'5') b[j]+=b[j]-'0'+k, k=0;
-                else b[j]+=b[j]-'0'-10+k, k=1;
+        for (i = 0; i < 1021; i++) {
+            for (k = 0, j = 1023; j > 0; j--) {
+                if (b[j] < '5')
+                    b[j] += b[j] - '0' + k, k = 0;
+                else
+                    b[j] += b[j] - '0' - 10 + k, k = 1;
             }
         }
         REQUIRE(b[1] == '1');
-        for (j=2; b[j]=='0'; j++);
-            REQUIRE(j == 1024);
+        for (j = 2; b[j] == '0'; j++);
+        REQUIRE(j == 1024);
     }
 
     // TODO
