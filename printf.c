@@ -679,7 +679,7 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 intmax_t val;
                 switch (type) {
                 case TYPE_NONE:     val = va_arg(va, int);          break;
-                case TYPE_CHAR:     val = (char)va_arg(va, int);    break;
+                case TYPE_CHAR:     val = (signed char)va_arg(va, int); break;
                 case TYPE_SHORT:    val = (short)va_arg(va, int);   break;
                 case TYPE_LONG:     val = va_arg(va, long);         break;
                 case TYPE_LLONG:    val = va_arg(va, long long);    break;

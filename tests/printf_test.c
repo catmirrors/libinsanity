@@ -433,7 +433,7 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%c", 'v'), "v");
     TEST_SNPRINTF(("%cv", 'w'), "wv");
     TEST_SNPRINTF(("%s", "A Test"), "A Test");
-    TEST_SNPRINTF(("%hhu", (signed char)0xFFFFU), "255");
+    TEST_SNPRINTF(("%hhu", (unsigned char)0xFFFFU), "255");
     TEST_SNPRINTF(("%hu", (unsigned short)0x123456U), "13398");
     TEST_SNPRINTF(("%s%hhi %hu", "Test", 10000, 0xFFFFFFFF), "Test16 65535");
     TEST_SNPRINTF(("%tx", &buffer[10] - &buffer[0]), "a");
@@ -441,6 +441,8 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%ju", (uintmax_t)2147483647UL), "2147483647");
 
     TEST_SNPRINTF(("%.*d", -1, 1), "1");
+
+    TEST_SNPRINTF(("%hhd", -1), "-1");
 
     #if TEST_IMPL_DEFINED
     cur_snprintf(buffer, sizeof(buffer), "%p", (void *)(uintptr_t)0x1234U);
