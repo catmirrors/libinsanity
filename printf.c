@@ -83,19 +83,12 @@ static void out_pad(struct buf *buf, char c, size_t l)
         outc(buf, c);
 }
 
-// internal test if char is a digit (0-9)
-// \return true if char is a digit
-static inline bool is_digit(char ch)
-{
-    return (ch >= '0') && (ch <= '9');
-}
-
 // internal ASCII string to unsigned int conversion
 // return 0 if there is no valid digit
 static inline unsigned int fmt_atoi(const char **str)
 {
     unsigned int i = 0U;
-    while (is_digit(**str))
+    while (**str >= '0' && **str <= '9')
         i = i * 10U + (unsigned int)(*((*str)++) - '0');
     return i;
 }
@@ -580,15 +573,15 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
 
         // evaluate width field
         int width = 0;
-        if (is_digit(*format)) {
-            width = fmt_atoi(&format);
-        } else if (*format == '*') {
+        if (*format == '*') {
             width = va_arg(va, int);
             if (width < 0) {
                 flags |= FLAGS_LEFT; // reverse padding
                 width = width == INT_MIN ? INT_MAX : -width;
             }
             format++;
+        } else {
+            width = fmt_atoi(&format);
         }
 
         // evaluate precision field
