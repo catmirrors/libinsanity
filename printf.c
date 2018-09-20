@@ -167,6 +167,9 @@ static void ntoa_format(struct buf *buffer, uintmax_t value, bool negative,
             prefix[prefix_len++] = flags & FLAGS_UPPERCASE ? 'X' : 'x';
         } else if (base == 8 && prec <= len) {
             prefix[prefix_len++] = '0';
+        } else if (base == 2) {
+            prefix[prefix_len++] = '0';
+            prefix[prefix_len++] = flags & FLAGS_UPPERCASE ? 'B' : 'b';
         }
     }
 

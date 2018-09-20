@@ -420,8 +420,8 @@ static void run_test(snprintf_type cur_snprintf)
     #if TEST_NON_STANDARD
     // Unportable extension in original printf implementation.
     TEST_SNPRINTF(("%b", 60000), "1110101001100000");
-    // Unportable extension in original printf implementation.
     TEST_SNPRINTF(("%lb", 12345678L), "101111000110000101001110");
+    TEST_SNPRINTF(("%#b", 60000), "0b1110101001100000");
     #endif
 
     TEST_SNPRINTF(("%o", 60000), "165140");
