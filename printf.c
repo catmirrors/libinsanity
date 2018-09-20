@@ -73,8 +73,12 @@ static void outc(struct buf *buf, char c)
 
 static void out(struct buf *buf, const char *s, size_t l)
 {
-    while (l--)
-        outc(buf, *s++);
+    size_t space = buf->end - buf->dst;
+    if (space > l)
+        space = l;
+    memcpy(buf->dst, s, space);
+    buf->dst += space;
+    buf->idx += l;
 }
 
 static void out_pad(struct buf *buf, char c, size_t l)
