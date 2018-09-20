@@ -661,18 +661,15 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         case 'o':
         case 'b': {
             // set the base
-            unsigned int base;
+            unsigned int base = 10U;
             if (fmt == 'x' || fmt == 'X')
                 base = 16U;
             else if (fmt == 'o')
                 base =  8U;
             else if (fmt == 'b') {
                 base =  2U;
-                flags &= ~FLAGS_HASH; // no hash for bin format
-            } else {
-                base = 10U;
-                flags &= ~FLAGS_HASH; // no hash for dec format
             }
+
             // uppercase
             if (fmt == 'X')
                 flags |= FLAGS_UPPERCASE;
