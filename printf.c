@@ -85,25 +85,25 @@ static void out_pad(struct buf *buf, char c, size_t l)
 
 // internal test if char is a digit (0-9)
 // \return true if char is a digit
-static inline bool _is_digit(char ch)
+static inline bool is_digit(char ch)
 {
     return (ch >= '0') && (ch <= '9');
 }
 
 // internal ASCII string to unsigned int conversion
 // return 0 if there is no valid digit
-static inline unsigned int _atoi(const char **str)
+static inline unsigned int fmt_atoi(const char **str)
 {
     unsigned int i = 0U;
-    while (_is_digit(**str))
+    while (is_digit(**str))
         i = i * 10U + (unsigned int)(*((*str)++) - '0');
     return i;
 }
 
 // internal itoa format
-static void _ntoa_format(struct buf *buffer, char *buf, int len,
-                         bool negative, unsigned int base, int prec,
-                         int width, unsigned int flags)
+static void ntoa_format(struct buf *buffer, char *buf, int len,
+                        bool negative, unsigned int base, int prec,
+                        int width, unsigned int flags)
 {
     bool is_zero = len == 1 && buf[0] == '0';
 
@@ -165,9 +165,9 @@ static char convert_digit(unsigned int flags, unsigned int digit)
 }
 
 // internal itoa for 'long' type
-static void _ntoa_long(struct buf *buffer, unsigned long value,
-                       bool negative, unsigned int base,
-                       int prec, int width, unsigned int flags)
+static void ntoa_long(struct buf *buffer, unsigned long value,
+                      bool negative, unsigned int base,
+                      int prec, int width, unsigned int flags)
 {
     // Worst case: base 2, plus terminating \0
     char buf[sizeof(value) * 8 + 1];
@@ -181,16 +181,16 @@ static void _ntoa_long(struct buf *buffer, unsigned long value,
         value /= base;
     } while (value);
 
-    _ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
-                 prec, width, flags);
+    ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
+                prec, width, flags);
 }
 
 // internal itoa for 'long long' type
-// the only difference to _ntoa_long is that the latter uses 32 bit arithmetic,
+// the only difference to ntoa_long is that the latter uses 32 bit arithmetic,
 // which will be faster on many platforms
-static void _ntoa_long_long(struct buf *buffer, unsigned long long value,
-                            bool negative, unsigned int base,
-                            int prec, int width, unsigned int flags)
+static void ntoa_long_long(struct buf *buffer, unsigned long long value,
+                           bool negative, unsigned int base,
+                           int prec, int width, unsigned int flags)
 {
     // Worst case: base 2, plus terminating \0
     char buf[sizeof(value) * 8 + 1];
@@ -204,8 +204,8 @@ static void _ntoa_long_long(struct buf *buffer, unsigned long long value,
         value /= base;
     } while (value);
 
-    _ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
-                 prec, width, flags);
+    ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
+                prec, width, flags);
 }
 
 static void pad(struct buf *f, char c, int w, int l, int fl)
@@ -538,7 +538,7 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
 }
 
 // internal vsnprintf
-static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
+static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
 {
     while (*format) {
         // format specifier?  %[flags][width][.precision][length]
@@ -580,8 +580,8 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
 
         // evaluate width field
         int width = 0;
-        if (_is_digit(*format)) {
-            width = _atoi(&format);
+        if (is_digit(*format)) {
+            width = fmt_atoi(&format);
         } else if (*format == '*') {
             width = va_arg(va, int);
             if (width < 0) {
@@ -599,7 +599,7 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                 precision = va_arg(va, int);
                 format++;
             } else {
-                precision = _atoi(&format);
+                precision = fmt_atoi(&format);
             }
         }
 
@@ -681,12 +681,12 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                 // signed
                 if (flags & FLAGS_LONG_LONG) {
                     long long value = va_arg(va, long long);
-                    _ntoa_long_long(buffer,
+                    ntoa_long_long(buffer,
                         (unsigned long long)(value > 0 ? value : 0 - value),
                         value < 0, base, precision, width, flags);
                 } else if (flags & FLAGS_LONG) {
                     long value = va_arg(va, long);
-                    _ntoa_long(buffer,
+                    ntoa_long(buffer,
                         (unsigned long)(value > 0 ? value : 0 - value),
                         value < 0, base, precision, width, flags);
                 } else {
@@ -695,17 +695,17 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                               : (flags & FLAGS_SHORT)
                               ? (short int)va_arg(va, int)
                               : va_arg(va, int);
-                    _ntoa_long(buffer,
+                    ntoa_long(buffer,
                                (unsigned int)(value > 0 ? value : 0 - value),
                                value < 0, base, precision, width, flags);
                 }
             } else {
                 // unsigned
                 if (flags & FLAGS_LONG_LONG) {
-                    _ntoa_long_long(buffer, va_arg(va, unsigned long long),
+                    ntoa_long_long(buffer, va_arg(va, unsigned long long),
                                     false, base, precision, width, flags);
                 } else if (flags & FLAGS_LONG) {
-                    _ntoa_long(buffer, va_arg(va, unsigned long),
+                    ntoa_long(buffer, va_arg(va, unsigned long),
                                false, base, precision, width, flags);
                 } else {
                     unsigned int value = flags & FLAGS_CHAR
@@ -713,7 +713,7 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                             : (flags & FLAGS_SHORT)
                             ? (unsigned short int)va_arg(va, unsigned int)
                             : va_arg(va, unsigned int);
-                    _ntoa_long(buffer, value, false, base, precision, width,
+                    ntoa_long(buffer, value, false, base, precision, width,
                                flags);
                 }
             }
@@ -763,10 +763,10 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
             width = sizeof(void *) * 2U;
             flags |= FLAGS_ZEROPAD | FLAGS_UPPERCASE;
             if (sizeof(uintptr_t) == sizeof(long long)) {
-                _ntoa_long_long(buffer, (uintptr_t)va_arg(va, void *), false,
+                ntoa_long_long(buffer, (uintptr_t)va_arg(va, void *), false,
                                 16U, precision, width, flags);
             } else {
-                _ntoa_long(buffer, (unsigned long)((uintptr_t)va_arg(va, void *)),
+                ntoa_long(buffer, (unsigned long)((uintptr_t)va_arg(va, void *)),
                            false, 16U, precision, width, flags);
             }
             break;
@@ -803,7 +803,7 @@ int lin_vsnprintf(char *buffer, size_t count, const char *format, va_list va)
         .end = count ? buffer + count - 1 : buffer,
     };
 
-    int res = _vsnprintf(&buf, format, va);
+    int res = vsnprintf_(&buf, format, va);
 
     // termination
     if (count)
