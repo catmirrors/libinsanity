@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <math.h>
 #include <limits.h>
@@ -511,6 +512,27 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%.3s", "foobar"), "foo");
     TEST_SNPRINTF(("%10.5d", 4), "     00004");
     TEST_SNPRINTF(("%*sx", -3, "hi"), "hi x");
+
+#if INT_MAX == 2147483647
+    TEST_SNPRINTF(("%d", INT_MAX), "2147483647");
+    TEST_SNPRINTF(("%d", INT_MIN), "-2147483648");
+    TEST_SNPRINTF(("%u", UINT_MAX), "4294967295");
+#endif
+#if LONG_MAX == 2147483647L
+    TEST_SNPRINTF(("%ld", LONG_MAX), "2147483647");
+    TEST_SNPRINTF(("%ld", LONG_MIN), "-2147483648");
+    TEST_SNPRINTF(("%lu", ULONG_MAX), "4294967295");
+#endif
+#if LONG_MAX == 9223372036854775807L
+    TEST_SNPRINTF(("%ld", LONG_MAX), "9223372036854775807");
+    TEST_SNPRINTF(("%ld", LONG_MIN), "-9223372036854775808");
+    TEST_SNPRINTF(("%lu", ULONG_MAX), "18446744073709551615");
+#endif
+    TEST_SNPRINTF(("%" PRIi32, INT32_MAX), "2147483647");
+    TEST_SNPRINTF(("%" PRIi32, INT32_MIN), "-2147483648");
+    TEST_SNPRINTF(("%" PRIi64, INT64_MAX), "9223372036854775807");
+    TEST_SNPRINTF(("%" PRIi64, INT64_MIN), "-9223372036854775808");
+    TEST_SNPRINTF(("%" PRIu64, UINT64_MAX), "18446744073709551615");
 
     // libc-testsuite tests
 
