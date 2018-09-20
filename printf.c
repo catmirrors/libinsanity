@@ -31,6 +31,7 @@
 // Modified for use in libinsanity.
 //
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -43,11 +44,6 @@
 
 #include "minmax.h"
 #include "printf.h"
-
-// ntoa conversion buffer size, this must be big enough to hold
-// one converted numeric number including padded zeros (dynamically created on stack)
-// 32 byte is a good default
-#define PRINTF_NTOA_BUFFER_SIZE    32U
 
 // internal flag definitions
 #define FLAGS_ZEROPAD   (1U <<  0U)
@@ -76,6 +72,18 @@ static void outc(struct buf *buf, char c)
     buf->idx++;
 }
 
+static void out(struct buf *buf, const char *s, size_t l)
+{
+    while (l--)
+        outc(buf, *s++);
+}
+
+static void out_pad(struct buf *buf, char c, size_t l)
+{
+    while (l--)
+        outc(buf, c);
+}
+
 // internal test if char is a digit (0-9)
 // \return true if char is a digit
 static inline bool _is_digit(char ch)
@@ -97,113 +105,106 @@ static void _ntoa_format(struct buf *buffer, char *buf, size_t len,
                          bool negative, unsigned int base, unsigned int prec,
                          unsigned int width, unsigned int flags)
 {
-    size_t start_idx = buffer->idx;
+    bool is_zero = len == 1 && buf[0] == '0';
 
-    // pad leading zeros
-    while (!(flags & FLAGS_LEFT) && len < prec && len < PRINTF_NTOA_BUFFER_SIZE)
-        buf[len++] = '0';
-    while (!(flags & FLAGS_LEFT) && (flags & FLAGS_ZEROPAD) && len < width &&
-           len < PRINTF_NTOA_BUFFER_SIZE)
-        buf[len++] = '0';
+    // If precision is forced to 0, don't output anything. Unless it's the
+    // crazy corner case of "%#.0o", which must output a single "0".
+    if ((flags & FLAGS_PRECISION) && prec == 0 && is_zero &&
+        !(base == 8 && (flags & FLAGS_HASH)))
+        len = 0;
 
-    // handle hash
-    if (flags & FLAGS_HASH) {
-        if ((len == prec || len == width) && len > 0U) {
-            len--;
-            if (base == 16U && len > 0U)
-                len--;
+    char prefix[3];
+    size_t prefix_len = 0;
+
+    if (negative) {
+        prefix[prefix_len++] = '-';
+    } else if (flags & FLAGS_PLUS) {
+        prefix[prefix_len++] = '+'; // ignore the space if the '+' exists
+    } else if (flags & FLAGS_SPACE) {
+        prefix[prefix_len++] = ' ';
+    }
+
+    // (0 values never include a prefix)
+    if ((flags & FLAGS_HASH) && !is_zero) {
+        if (base == 16) {
+            prefix[prefix_len++] = '0';
+            prefix[prefix_len++] = flags & FLAGS_UPPERCASE ? 'X' : 'x';
+        } else if (base == 8 && prec <= len) {
+            prefix[prefix_len++] = '0';
         }
-        if (base == 16U && len < PRINTF_NTOA_BUFFER_SIZE)
-            buf[len++] = flags & FLAGS_UPPERCASE ? 'X' : 'x';
-        if (len < PRINTF_NTOA_BUFFER_SIZE)
-            buf[len++] = '0';
-        if (!prec && flags & FLAGS_PRECISION && base == 16U && len >= 2)
-            len -= 2;
     }
 
-    // handle sign
-    if (len == width && (negative || (flags & FLAGS_PLUS) || (flags & FLAGS_SPACE)))
-    {
-        if (len)
-            len--;
-    }
-    if (len < PRINTF_NTOA_BUFFER_SIZE) {
-        if (negative)
-            buf[len++] = '-';
-        else if (flags & FLAGS_PLUS)
-            buf[len++] = '+'; // ignore the space if the '+' exists
-        else if (flags & FLAGS_SPACE)
-            buf[len++] = ' ';
-    }
+    // If zeropad is given, precision is unset. Make it pad to the given width,
+    // which means we need to include prefixes into the pad amount.
+    if (flags & FLAGS_ZEROPAD)
+        prec = width >= prefix_len ? width - prefix_len : 0;
 
-    // pad spaces up to given width
-    if (!(flags & FLAGS_LEFT) && !(flags & FLAGS_ZEROPAD)) {
-        for (size_t i = len; i < width; i++)
-            outc(buffer, ' ');
-    }
+    size_t zero_pad = 0;
+    if (!(flags & FLAGS_LEFT) && prec > len)
+        zero_pad = prec - len;
 
-    // reverse string
-    for (size_t i = 0U; i < len; i++)
-        outc(buffer, buf[len - i - 1U]);
+    size_t total_len = prefix_len + zero_pad + len;
 
-    // append pad spaces up to given width
-    if (flags & FLAGS_LEFT) {
-        while (buffer->idx - start_idx < width)
-            outc(buffer, ' ');
-    }
+    if (!(flags & FLAGS_LEFT) && !(flags & FLAGS_ZEROPAD) && width > total_len)
+        out_pad(buffer, ' ', width - total_len);
+
+    out(buffer, prefix, prefix_len);
+    out_pad(buffer, '0', zero_pad);
+    out(buffer, buf, len);
+
+    if ((flags & FLAGS_LEFT) && width > total_len)
+        out_pad(buffer, ' ', width - total_len);
 }
 
+static char convert_digit(unsigned int flags, unsigned int digit)
+{
+    return digit < 10 ? '0' + digit
+                      : (flags & FLAGS_UPPERCASE ? 'A' : 'a') + (digit - 10);
+}
 
 // internal itoa for 'long' type
 static void _ntoa_long(struct buf *buffer, unsigned long value, bool negative,
-                       unsigned long base, unsigned int prec,
+                       unsigned int base, unsigned int prec,
                        unsigned int width, unsigned int flags)
 {
-    char buf[PRINTF_NTOA_BUFFER_SIZE];
-    size_t len = 0U;
+    // Worst case: base 2, plus terminating \0
+    char buf[sizeof(value) * 8 + 1];
+    int pos = sizeof(buf);
 
-    // write if precision != 0 and value is != 0
-    if (!(flags & FLAGS_PRECISION) || value) {
-        do {
-            char digit = (char)(value % base);
-            buf[len++] = digit < 10
-                ? '0' + digit : (flags & FLAGS_UPPERCASE ? 'A' : 'a') + digit - 10;
-            value /= base;
-        } while (value && len < PRINTF_NTOA_BUFFER_SIZE);
-    }
+    buf[--pos] = '\0';
 
-    _ntoa_format(buffer, buf, len, negative, (unsigned int)base, prec, width,
-                 flags);
+    do {
+        assert(pos > 0);
+        buf[--pos] = convert_digit(flags, value % base);
+        value /= base;
+    } while (value);
+
+    _ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
+                 prec, width, flags);
 }
 
-
 // internal itoa for 'long long' type
+// the only difference to _ntoa_long is that the latter uses 32 bit arithmetic,
+// which will be faster on many platforms
 static void _ntoa_long_long(struct buf *buffer, unsigned long long value,
-                            bool negative, unsigned long long base,
+                            bool negative, unsigned int base,
                             unsigned int prec, unsigned int width,
                             unsigned int flags)
 {
-    char buf[PRINTF_NTOA_BUFFER_SIZE];
-    size_t len = 0U;
+    // Worst case: base 2, plus terminating \0
+    char buf[sizeof(value) * 8 + 1];
+    int pos = sizeof(buf);
 
-    // write if precision != 0 and value is != 0
-    if (!(flags & FLAGS_PRECISION) || value) {
-        do {
-            char digit = (char)(value % base);
-            buf[len++] = digit < 10
-                ? '0' + digit : (flags & FLAGS_UPPERCASE ? 'A' : 'a') + digit - 10;
-            value /= base;
-        } while (value && len < PRINTF_NTOA_BUFFER_SIZE);
-    }
+    buf[--pos] = '\0';
 
-    _ntoa_format(buffer, buf, len, negative, (unsigned int)base, prec, width,
-                 flags);
-}
+    do {
+        assert(pos > 0);
+        buf[--pos] = convert_digit(flags, value % base);
+        value /= base;
+    } while (value);
 
-static void out(struct buf *buf, const char *s, size_t l)
-{
-    while (l--)
-        outc(buf, *s++);
+    _ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
+                 prec, width, flags);
 }
 
 // Map musl names to the flag constants used here.
@@ -625,6 +626,10 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                 format++;
             }
         }
+
+        // "A - overrides a 0 if both are given."
+        if (flags & FLAGS_LEFT)
+            flags &= ~FLAGS_ZEROPAD;
 
         // evaluate length field
         switch (*format) {

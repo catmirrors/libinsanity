@@ -534,6 +534,26 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%" PRIi64, INT64_MIN), "-9223372036854775808");
     TEST_SNPRINTF(("%" PRIu64, UINT64_MAX), "18446744073709551615");
 
+    TEST_SNPRINTF(("%x", 0), "0");
+    TEST_SNPRINTF(("%#x", 0), "0");
+    TEST_SNPRINTF(("%#04x", 0), "0000");
+    TEST_SNPRINTF(("%#08x", 0x614e), "0x00614e");
+    TEST_SNPRINTF(("%#.3x", 0x614e), "0x614e");
+    TEST_SNPRINTF(("%#.4x", 0x614e), "0x614e");
+    TEST_SNPRINTF(("%#.5x", 0x614e), "0x0614e");
+    TEST_SNPRINTF(("%#.6x", 0x614e), "0x00614e");
+    TEST_SNPRINTF(("%#.7x", 0x614e), "0x000614e");
+
+    TEST_SNPRINTF(("%o", 00), "0");
+    TEST_SNPRINTF(("%#o", 00), "0");
+    TEST_SNPRINTF(("%#04o", 0), "0000");
+    TEST_SNPRINTF(("%#08o", 06143), "00006143");
+    TEST_SNPRINTF(("%#.3o", 06143), "06143");
+    TEST_SNPRINTF(("%#.4o", 06143), "06143");
+    TEST_SNPRINTF(("%#.5o", 06143), "06143");
+    TEST_SNPRINTF(("%#.6o", 06143), "006143");
+    TEST_SNPRINTF(("%#.7o", 06143), "0006143");
+
     // libc-testsuite tests
 
     /* width, precision, alignment */
@@ -562,6 +582,7 @@ static void run_test(snprintf_type cur_snprintf)
     // Note: the original libc-testsuite specifies "" as expected.
     TEST_SNPRINTF(("%#.0o", 0), "0");
     TEST_SNPRINTF(("%#.0x", 0), "");
+    TEST_SNPRINTF(("%#3.0x", 0), "   ");
 
     /* ...but it still has to honor width and flags. */
     TEST_SNPRINTF(("%2.0u", 0), "  ");
