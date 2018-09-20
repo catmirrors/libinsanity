@@ -52,11 +52,23 @@
 #define FLAGS_SPACE     (1U <<  3U)
 #define FLAGS_HASH      (1U <<  4U)
 #define FLAGS_UPPERCASE (1U <<  5U)
-#define FLAGS_CHAR      (1U <<  6U)
-#define FLAGS_SHORT     (1U <<  7U)
-#define FLAGS_LONG      (1U <<  8U)
-#define FLAGS_LONG_LONG (1U <<  9U)
 #define FLAGS_WIDTH     (1U << 11U)
+
+// these are more like type modifiers; the exact type also depends on the
+// conversion specifier
+enum {
+    TYPE_NONE,
+    TYPE_CHAR,
+    TYPE_SHORT,
+    TYPE_LONG,
+    TYPE_LLONG,
+    TYPE_PTRDIFF,
+    TYPE_INTMAX,
+    TYPE_SIZE,
+};
+
+// If this fails, you need to adjust the corresponding va_arg() invocations.
+_Static_assert(sizeof(ptrdiff_t) == sizeof(size_t), "");
 
 struct buf {
     char *dst;
@@ -97,16 +109,44 @@ static inline unsigned int fmt_atoi(const char **str)
     return i;
 }
 
-// internal itoa format
-static void ntoa_format(struct buf *buffer, char *buf, int len,
-                        bool negative, unsigned int base, int prec,
-                        int width, unsigned int flags)
+static char convert_digit(unsigned int flags, unsigned int digit)
 {
-    bool is_zero = len == 1 && buf[0] == '0';
+    return digit < 10 ? '0' + digit
+                      : (flags & FLAGS_UPPERCASE ? 'A' : 'a') + (digit - 10);
+}
+
+// internal itoa format
+static void ntoa_format(struct buf *buffer, uintmax_t value, bool negative,
+                        unsigned int base, int prec, int width, unsigned int flags)
+{
+    // Worst case: base 2, plus terminating \0
+    char tmp[sizeof(value) * 8 + 1];
+    int pos = sizeof(tmp);
+
+    tmp[--pos] = '\0';
+
+    if (value > UINT_MAX) {
+        do {
+            assert(pos > 0);
+            tmp[--pos] = convert_digit(flags, value % base);
+            value /= base;
+        } while (value);
+    } else {
+        // uses 32 bit arithmetic, which could be faster on many platforms
+        unsigned int uvalue = value;
+        do {
+            assert(pos > 0);
+            tmp[--pos] = convert_digit(flags, uvalue % base);
+            uvalue /= base;
+        } while (uvalue);
+    }
+
+    char *number = tmp + pos;
+    int len = sizeof(tmp) - pos - 1;
 
     // If precision is forced to 0, don't output anything. Unless it's the
     // crazy corner case of "%#.0o", which must output a single "0".
-    if (prec == 0 && is_zero && !(base == 8 && (flags & FLAGS_HASH)))
+    if (prec == 0 && !value && !(base == 8 && (flags & FLAGS_HASH)))
         len = 0;
 
     char prefix[3];
@@ -121,7 +161,7 @@ static void ntoa_format(struct buf *buffer, char *buf, int len,
     }
 
     // (0 values never include a prefix)
-    if ((flags & FLAGS_HASH) && !is_zero) {
+    if ((flags & FLAGS_HASH) && value) {
         if (base == 16) {
             prefix[prefix_len++] = '0';
             prefix[prefix_len++] = flags & FLAGS_UPPERCASE ? 'X' : 'x';
@@ -149,60 +189,10 @@ static void ntoa_format(struct buf *buffer, char *buf, int len,
 
     out(buffer, prefix, prefix_len);
     out_pad(buffer, '0', zero_pad);
-    out(buffer, buf, len);
+    out(buffer, number, len);
 
     if ((flags & FLAGS_LEFT))
         out_pad(buffer, ' ', space_pad);
-}
-
-static char convert_digit(unsigned int flags, unsigned int digit)
-{
-    return digit < 10 ? '0' + digit
-                      : (flags & FLAGS_UPPERCASE ? 'A' : 'a') + (digit - 10);
-}
-
-// internal itoa for 'long' type
-static void ntoa_long(struct buf *buffer, unsigned long value,
-                      bool negative, unsigned int base,
-                      int prec, int width, unsigned int flags)
-{
-    // Worst case: base 2, plus terminating \0
-    char buf[sizeof(value) * 8 + 1];
-    int pos = sizeof(buf);
-
-    buf[--pos] = '\0';
-
-    do {
-        assert(pos > 0);
-        buf[--pos] = convert_digit(flags, value % base);
-        value /= base;
-    } while (value);
-
-    ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
-                prec, width, flags);
-}
-
-// internal itoa for 'long long' type
-// the only difference to ntoa_long is that the latter uses 32 bit arithmetic,
-// which will be faster on many platforms
-static void ntoa_long_long(struct buf *buffer, unsigned long long value,
-                           bool negative, unsigned int base,
-                           int prec, int width, unsigned int flags)
-{
-    // Worst case: base 2, plus terminating \0
-    char buf[sizeof(value) * 8 + 1];
-    int pos = sizeof(buf);
-
-    buf[--pos] = '\0';
-
-    do {
-        assert(pos > 0);
-        buf[--pos] = convert_digit(flags, value % base);
-        value /= base;
-    } while (value);
-
-    ntoa_format(buffer, buf + pos, sizeof(buf) - pos - 1, negative, base,
-                prec, width, flags);
 }
 
 static void pad(struct buf *f, char c, int w, int l, int fl)
@@ -605,36 +595,34 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             flags &= ~FLAGS_ZEROPAD;
 
         // evaluate length field
+        int type = TYPE_NONE;
         switch (*format) {
         case 'l':
-            flags |= FLAGS_LONG;
+            type = TYPE_LONG;
             format++;
             if (*format == 'l') {
-                flags |= FLAGS_LONG_LONG;
+                type = TYPE_LLONG;
                 format++;
             }
             break;
         case 'h':
-            flags |= FLAGS_SHORT;
+            type = TYPE_SHORT;
             format++;
             if (*format == 'h') {
-                flags |= FLAGS_CHAR;
+                type = TYPE_CHAR;
                 format++;
             }
             break;
         case 't':
-            flags |= sizeof(ptrdiff_t) == sizeof(long)
-                     ? FLAGS_LONG : FLAGS_LONG_LONG;
+            type = TYPE_PTRDIFF;
             format++;
             break;
-        case 'j':
-            flags |= sizeof(intmax_t) == sizeof(long)
-                     ? FLAGS_LONG : FLAGS_LONG_LONG;
+        case 'j': ;
+            type = TYPE_INTMAX;
             format++;
             break;
         case 'z':
-            flags |= sizeof(size_t) == sizeof(long)
-                     ? FLAGS_LONG : FLAGS_LONG_LONG;
+            type = TYPE_SIZE;
             format++;
             break;
         default:
@@ -676,43 +664,35 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             // convert the integer
             if (fmt == 'i' || fmt == 'd') {
                 // signed
-                if (flags & FLAGS_LONG_LONG) {
-                    long long value = va_arg(va, long long);
-                    ntoa_long_long(buffer,
-                        (unsigned long long)(value > 0 ? value : 0 - value),
-                        value < 0, base, precision, width, flags);
-                } else if (flags & FLAGS_LONG) {
-                    long value = va_arg(va, long);
-                    ntoa_long(buffer,
-                        (unsigned long)(value > 0 ? value : 0 - value),
-                        value < 0, base, precision, width, flags);
-                } else {
-                    int value = flags & FLAGS_CHAR
-                              ? (char)va_arg(va, int)
-                              : (flags & FLAGS_SHORT)
-                              ? (short int)va_arg(va, int)
-                              : va_arg(va, int);
-                    ntoa_long(buffer,
-                               (unsigned int)(value > 0 ? value : 0 - value),
-                               value < 0, base, precision, width, flags);
+                intmax_t val;
+                switch (type) {
+                case TYPE_NONE:     val = va_arg(va, int);          break;
+                case TYPE_CHAR:     val = (char)va_arg(va, int);    break;
+                case TYPE_SHORT:    val = (short)va_arg(va, int);   break;
+                case TYPE_LONG:     val = va_arg(va, long);         break;
+                case TYPE_LLONG:    val = va_arg(va, long long);    break;
+                case TYPE_PTRDIFF:  val = va_arg(va, ptrdiff_t);    break;
+                case TYPE_INTMAX:   val = va_arg(va, intmax_t);     break;
+                case TYPE_SIZE:     val = va_arg(va, ptrdiff_t);    break;
+                default: assert(0);
                 }
+                ntoa_format(buffer, val > 0 ? val : -(uintmax_t)val, val < 0,
+                            base, precision, width, flags);
             } else {
                 // unsigned
-                if (flags & FLAGS_LONG_LONG) {
-                    ntoa_long_long(buffer, va_arg(va, unsigned long long),
-                                    false, base, precision, width, flags);
-                } else if (flags & FLAGS_LONG) {
-                    ntoa_long(buffer, va_arg(va, unsigned long),
-                               false, base, precision, width, flags);
-                } else {
-                    unsigned int value = flags & FLAGS_CHAR
-                            ? (unsigned char)va_arg(va, unsigned int)
-                            : (flags & FLAGS_SHORT)
-                            ? (unsigned short int)va_arg(va, unsigned int)
-                            : va_arg(va, unsigned int);
-                    ntoa_long(buffer, value, false, base, precision, width,
-                               flags);
+                uintmax_t val;
+                switch (type) {
+                case TYPE_NONE:     val = va_arg(va, unsigned);                 break;
+                case TYPE_CHAR:     val = (unsigned char)va_arg(va, unsigned);  break;
+                case TYPE_SHORT:    val = (unsigned short)va_arg(va, unsigned); break;
+                case TYPE_LONG:     val = va_arg(va, unsigned long);            break;
+                case TYPE_LLONG:    val = va_arg(va, unsigned long long);       break;
+                case TYPE_PTRDIFF:  val = va_arg(va, size_t);                   break;
+                case TYPE_INTMAX:   val = va_arg(va, uintmax_t);                break;
+                case TYPE_SIZE:     val = va_arg(va, size_t);                   break;
+                default: assert(0);
                 }
+                ntoa_format(buffer, val, false, base, precision, width, flags);
             }
             break;
         }
@@ -759,13 +739,8 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
         case 'p': {
             width = sizeof(void *) * 2U;
             flags |= FLAGS_ZEROPAD | FLAGS_UPPERCASE;
-            if (sizeof(uintptr_t) == sizeof(long long)) {
-                ntoa_long_long(buffer, (uintptr_t)va_arg(va, void *), false,
-                                16U, precision, width, flags);
-            } else {
-                ntoa_long(buffer, (unsigned long)((uintptr_t)va_arg(va, void *)),
-                           false, 16U, precision, width, flags);
-            }
+            ntoa_format(buffer, (uintptr_t)va_arg(va, void *), false, 16,
+                        precision, width, flags);
             break;
         }
 

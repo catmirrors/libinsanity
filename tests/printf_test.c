@@ -413,9 +413,10 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%lu", 0xFFFFFFFFL), "4294967295");
     TEST_SNPRINTF(("%llu", 281474976710656LLU), "281474976710656");
     TEST_SNPRINTF(("%llu", 18446744073709551615LLU), "18446744073709551615");
-    TEST_SNPRINTF(("%zu", 2147483647UL), "2147483647");
-    TEST_SNPRINTF(("%zd", 2147483647UL), "2147483647");
-    TEST_SNPRINTF(("%zi", (ptrdiff_t)-2147483647LL), "-2147483647");
+    TEST_SNPRINTF(("%zu", (size_t)2147483647UL), "2147483647");
+    TEST_SNPRINTF(("%zd", (ptrdiff_t)2147483647UL), "2147483647");
+    TEST_SNPRINTF(("%tu", (size_t)2147483647UL), "2147483647");
+    TEST_SNPRINTF(("%td", (ptrdiff_t)2147483647UL), "2147483647");
     #if TEST_NON_STANDARD
     // Unportable extension in original printf implementation.
     TEST_SNPRINTF(("%b", 60000), "1110101001100000");
@@ -436,8 +437,8 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%hu", (unsigned short)0x123456U), "13398");
     TEST_SNPRINTF(("%s%hhi %hu", "Test", 10000, 0xFFFFFFFF), "Test16 65535");
     TEST_SNPRINTF(("%tx", &buffer[10] - &buffer[0]), "a");
-    // TBD
     TEST_SNPRINTF(("%ji", (intmax_t)-2147483647L), "-2147483647");
+    TEST_SNPRINTF(("%ju", (uintmax_t)2147483647UL), "2147483647");
 
     TEST_SNPRINTF(("%.*d", -1, 1), "1");
 
