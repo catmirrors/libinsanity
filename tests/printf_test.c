@@ -676,6 +676,13 @@ static void run_test(snprintf_type cur_snprintf)
 
     TEST_SNPRINTF_N(("%.4a", 1.0), 11);
 
+    #if TEST_IMPL_DEFINED
+    int r = cur_snprintf(buffer, sizeof(buffer), "a%wb", &(int){0});
+    printf("%d '%s'\n", r, buffer);
+    assert(r < 0);
+    REQUIRE_STR_EQ(buffer, "a%w<error>b");
+    #endif
+
     printf("All tests succeeded.\n");
 }
 

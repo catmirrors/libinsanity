@@ -74,6 +74,7 @@ struct buf {
     char *dst;
     char *end;
     size_t idx;
+    bool overflow;
 };
 
 static void outc(struct buf *buf, char c)
@@ -81,6 +82,8 @@ static void outc(struct buf *buf, char c)
     if (buf->dst < buf->end)
         *buf->dst++ = c;
     buf->idx++;
+    if (!buf->idx)
+        buf->overflow = true;
 }
 
 static void out(struct buf *buf, const char *s, size_t l)
@@ -91,6 +94,8 @@ static void out(struct buf *buf, const char *s, size_t l)
     memcpy(buf->dst, s, space);
     buf->dst += space;
     buf->idx += l;
+    if (buf->idx < l)
+        buf->overflow = true;
 }
 
 static void out_pad(struct buf *buf, char c, size_t l)
@@ -106,7 +111,7 @@ static inline unsigned int fmt_atoi(const char **str)
     unsigned int i = 0U;
     while (**str >= '0' && **str <= '9')
         i = i * 10U + (unsigned int)(*((*str)++) - '0');
-    return i;
+    return MIN(i, INT_MAX);
 }
 
 static char convert_digit(unsigned int flags, unsigned int digit)
@@ -530,7 +535,11 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
 // internal vsnprintf
 static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
 {
+    int err = 0;
+
     while (*format) {
+        const char *format_start = format;
+
         // format specifier?  %[flags][width][.precision][length]
         if (*format != '%') {
             outc(buffer, *format++);
@@ -751,10 +760,18 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             break;
 
         default:
-            outc(buffer, fmt);
+            out(buffer, format_start, format - format_start);
+            out(buffer, "<error>", 7);
+            err = -1;
             break;
         }
     }
+
+    if (buffer->overflow)
+        err = -1;
+
+    if (err)
+        return err;
 
     // return total number of chars, including the amount outside of the buffer
     return buffer->idx <= INT_MAX ? buffer->idx : -1;

@@ -12,6 +12,7 @@
 //  - No Microsoft extensions (this may break with <inttypes.h> format macros)
 //  - Locale independent (always uses "C" locale).
 //  - Supports the conversion specifier 'b' for binary number output.
+//  - str is _always_ 0-terminated (unless size==0).
 // The compiler's format checker won't warn against these.
 __attribute__((format(printf, 3, 4)))
 int lin_snprintf(char *str, size_t size, const char *format, ...);
