@@ -665,11 +665,7 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             if (fmt == 'X')
                 flags |= FLAGS_UPPERCASE;
 
-            // no plus or space flag for u, x, X, o, b
-            if (fmt != 'i' && fmt != 'd')
-                flags &= ~(FLAGS_PLUS | FLAGS_SPACE);
-
-            // if a precision is specified, the 0 flags is ignored
+            // if a precision is specified, the 0 flag is ignored
             if (precision >= 0)
                 flags &= ~FLAGS_ZEROPAD;
 
@@ -704,6 +700,7 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 case TYPE_SIZE:     val = va_arg(va, size_t);                   break;
                 default: assert(0);
                 }
+                flags &= ~(FLAGS_PLUS | FLAGS_SPACE);
                 ntoa_format(buffer, val, false, base, precision, width, flags);
             }
             break;
