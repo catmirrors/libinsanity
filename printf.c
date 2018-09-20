@@ -546,57 +546,46 @@ static int fmt_fp(struct buf *f, long double y, int w, int p, int fl, int t)
 // internal vsnprintf
 static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
 {
-    unsigned int flags, width, precision, n;
-
     while (*format) {
         // format specifier?  %[flags][width][.precision][length]
         if (*format != '%') {
-            // no
-            outc(buffer, *format);
-            format++;
+            outc(buffer, *format++);
             continue;
-        } else {
-            // yes, evaluate it
-            format++;
         }
 
+        format++;
+
         // evaluate flags
-        flags = 0U;
-        do {
+        unsigned int flags = 0U;
+        while (1) {
+            bool done = false;
             switch (*format) {
             case '0':
                 flags |= FLAGS_ZEROPAD;
-                format++;
-                n = 1U;
                 break;
             case '-':
                 flags |= FLAGS_LEFT;
-                format++;
-                n = 1U;
                 break;
             case '+':
                 flags |= FLAGS_PLUS;
-                format++;
-                n = 1U;
                 break;
             case ' ':
                 flags |= FLAGS_SPACE;
-                format++;
-                n = 1U;
                 break;
             case '#':
                 flags |= FLAGS_HASH;
-                format++;
-                n = 1U;
                 break;
             default:
-                n = 0U;
+                done = true;
                 break;
             }
-        } while (n);
+            if (done)
+                break;
+            format++;
+        }
 
         // evaluate width field
-        width = 0U;
+        unsigned int width = 0U;
         if (_is_digit(*format)) {
             width = _atoi(&format);
         } else if (*format == '*') {
@@ -610,7 +599,7 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         }
 
         // evaluate precision field
-        precision = 0U;
+        unsigned int precision = 0U;
         if (*format == '.') {
             flags |= FLAGS_PRECISION;
             format++;
@@ -669,7 +658,8 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         }
 
         // evaluate specifier
-        switch (*format) {
+        char fmt = *format++;
+        switch (fmt) {
         case 'd':
         case 'i':
         case 'u':
@@ -679,11 +669,11 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         case 'b': {
             // set the base
             unsigned int base;
-            if (*format == 'x' || *format == 'X')
+            if (fmt == 'x' || fmt == 'X')
                 base = 16U;
-            else if (*format == 'o')
+            else if (fmt == 'o')
                 base =  8U;
-            else if (*format == 'b') {
+            else if (fmt == 'b') {
                 base =  2U;
                 flags &= ~FLAGS_HASH; // no hash for bin format
             } else {
@@ -691,11 +681,11 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                 flags &= ~FLAGS_HASH; // no hash for dec format
             }
             // uppercase
-            if (*format == 'X')
+            if (fmt == 'X')
                 flags |= FLAGS_UPPERCASE;
 
             // no plus or space flag for u, x, X, o, b
-            if ((*format != 'i') && (*format != 'd'))
+            if (fmt != 'i' && fmt != 'd')
                 flags &= ~(FLAGS_PLUS | FLAGS_SPACE);
 
             // if a precision is specified, the 0 flags is ignored
@@ -703,7 +693,7 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                 flags &= ~FLAGS_ZEROPAD;
 
             // convert the integer
-            if (*format == 'i' || *format == 'd') {
+            if (fmt == 'i' || fmt == 'd') {
                 // signed
                 if (flags & FLAGS_LONG_LONG) {
                     long long value = va_arg(va, long long);
@@ -743,7 +733,6 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                                flags);
                 }
             }
-            format++;
             break;
         }
         case 'f':
@@ -755,26 +744,19 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         case 'a':
         case 'A': {
             int prec = flags & FLAGS_PRECISION ? (int)precision : -1;
-            if (fmt_fp(buffer, va_arg(va, double), width, prec, flags, *format) < 0)
+            if (fmt_fp(buffer, va_arg(va, double), width, prec, flags, fmt) < 0)
                 out(buffer, "<error>", 7);
-            format++;
             break;
         }
         case 'c': {
-            unsigned int l = 1U;
             // pre padding
-            if (!(flags & FLAGS_LEFT)) {
-                while (l++ < width)
-                    outc(buffer, ' ');
-            }
+            if (!(flags & FLAGS_LEFT) && width > 1)
+                out_pad(buffer, ' ', width - 1);
             // char output
             outc(buffer, (char)va_arg(va, int));
             // post padding
-            if (flags & FLAGS_LEFT) {
-                while (l++ < width)
-                    outc(buffer, ' ');
-            }
-            format++;
+            if ((flags & FLAGS_LEFT) && width > 1)
+                out_pad(buffer, ' ', width - 1);
             break;
         }
 
@@ -783,20 +765,15 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
             size_t l = strlen(p);
             // pre padding
             if (flags & FLAGS_PRECISION)
-                l = (l < precision ? l : precision);
-            if (!(flags & FLAGS_LEFT)) {
-                while (l++ < width)
-                    outc(buffer, ' ');
-            }
+                l = l < precision ? l : precision;
+            if (!(flags & FLAGS_LEFT) && width > l)
+                out_pad(buffer, ' ', width - l);
             // string output
             while (*p != 0 && (!(flags & FLAGS_PRECISION) || precision--))
                 outc(buffer, *(p++));
             // post padding
-            if (flags & FLAGS_LEFT) {
-                while (l++ < width)
-                    outc(buffer, ' ');
-            }
-            format++;
+            if ((flags & FLAGS_LEFT) && width > l)
+                out_pad(buffer, ' ', width - l);
             break;
         }
 
@@ -810,18 +787,15 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                 _ntoa_long(buffer, (unsigned long)((uintptr_t)va_arg(va, void *)),
                            false, 16U, precision, width, flags);
             }
-            format++;
             break;
         }
 
         case '%':
             outc(buffer, '%');
-            format++;
             break;
 
         default:
-            outc(buffer, *format);
-            format++;
+            outc(buffer, fmt);
             break;
         }
     }
@@ -829,9 +803,6 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
     // return total number of chars, including the amount outside of the buffer
     return buffer->idx <= INT_MAX ? buffer->idx : -1;
 }
-
-
-///////////////////////////////////////////////////////////////////////////////
 
 int lin_snprintf(char *buffer, size_t count, const char *format, ...)
 {
