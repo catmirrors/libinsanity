@@ -56,7 +56,6 @@
 #define FLAGS_SHORT     (1U <<  7U)
 #define FLAGS_LONG      (1U <<  8U)
 #define FLAGS_LONG_LONG (1U <<  9U)
-#define FLAGS_PRECISION (1U << 10U)
 #define FLAGS_WIDTH     (1U << 11U)
 
 struct buf {
@@ -92,6 +91,7 @@ static inline bool _is_digit(char ch)
 }
 
 // internal ASCII string to unsigned int conversion
+// return 0 if there is no valid digit
 static inline unsigned int _atoi(const char **str)
 {
     unsigned int i = 0U;
@@ -101,20 +101,19 @@ static inline unsigned int _atoi(const char **str)
 }
 
 // internal itoa format
-static void _ntoa_format(struct buf *buffer, char *buf, size_t len,
-                         bool negative, unsigned int base, unsigned int prec,
-                         unsigned int width, unsigned int flags)
+static void _ntoa_format(struct buf *buffer, char *buf, int len,
+                         bool negative, unsigned int base, int prec,
+                         int width, unsigned int flags)
 {
     bool is_zero = len == 1 && buf[0] == '0';
 
     // If precision is forced to 0, don't output anything. Unless it's the
     // crazy corner case of "%#.0o", which must output a single "0".
-    if ((flags & FLAGS_PRECISION) && prec == 0 && is_zero &&
-        !(base == 8 && (flags & FLAGS_HASH)))
+    if (prec == 0 && is_zero && !(base == 8 && (flags & FLAGS_HASH)))
         len = 0;
 
     char prefix[3];
-    size_t prefix_len = 0;
+    int prefix_len = 0;
 
     if (negative) {
         prefix[prefix_len++] = '-';
@@ -136,24 +135,27 @@ static void _ntoa_format(struct buf *buffer, char *buf, size_t len,
 
     // If zeropad is given, precision is unset. Make it pad to the given width,
     // which means we need to include prefixes into the pad amount.
-    if (flags & FLAGS_ZEROPAD)
+    if (flags & FLAGS_ZEROPAD) {
         prec = width >= prefix_len ? width - prefix_len : 0;
+        width = 0;
+    }
 
     size_t zero_pad = 0;
     if (!(flags & FLAGS_LEFT) && prec > len)
         zero_pad = prec - len;
 
     size_t total_len = prefix_len + zero_pad + len;
+    size_t space_pad = width > total_len ? width - total_len : 0;
 
-    if (!(flags & FLAGS_LEFT) && !(flags & FLAGS_ZEROPAD) && width > total_len)
-        out_pad(buffer, ' ', width - total_len);
+    if (!(flags & FLAGS_LEFT))
+        out_pad(buffer, ' ', space_pad);
 
     out(buffer, prefix, prefix_len);
     out_pad(buffer, '0', zero_pad);
     out(buffer, buf, len);
 
-    if ((flags & FLAGS_LEFT) && width > total_len)
-        out_pad(buffer, ' ', width - total_len);
+    if ((flags & FLAGS_LEFT))
+        out_pad(buffer, ' ', space_pad);
 }
 
 static char convert_digit(unsigned int flags, unsigned int digit)
@@ -163,9 +165,9 @@ static char convert_digit(unsigned int flags, unsigned int digit)
 }
 
 // internal itoa for 'long' type
-static void _ntoa_long(struct buf *buffer, unsigned long value, bool negative,
-                       unsigned int base, unsigned int prec,
-                       unsigned int width, unsigned int flags)
+static void _ntoa_long(struct buf *buffer, unsigned long value,
+                       bool negative, unsigned int base,
+                       int prec, int width, unsigned int flags)
 {
     // Worst case: base 2, plus terminating \0
     char buf[sizeof(value) * 8 + 1];
@@ -188,8 +190,7 @@ static void _ntoa_long(struct buf *buffer, unsigned long value, bool negative,
 // which will be faster on many platforms
 static void _ntoa_long_long(struct buf *buffer, unsigned long long value,
                             bool negative, unsigned int base,
-                            unsigned int prec, unsigned int width,
-                            unsigned int flags)
+                            int prec, int width, unsigned int flags)
 {
     // Worst case: base 2, plus terminating \0
     char buf[sizeof(value) * 8 + 1];
@@ -578,34 +579,27 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         }
 
         // evaluate width field
-        unsigned int width = 0U;
+        int width = 0;
         if (_is_digit(*format)) {
             width = _atoi(&format);
         } else if (*format == '*') {
-            int w = va_arg(va, int);
-            if (w < 0) {
+            width = va_arg(va, int);
+            if (width < 0) {
                 flags |= FLAGS_LEFT; // reverse padding
-                width = (unsigned int)-w;
-            } else
-                width = (unsigned int)w;
+                width = width == INT_MIN ? INT_MAX : -width;
+            }
             format++;
         }
 
         // evaluate precision field
-        unsigned int precision = 0U;
+        int precision = -1;
         if (*format == '.') {
-            flags |= FLAGS_PRECISION;
             format++;
-            if (_is_digit(*format)) {
-                precision = _atoi(&format);
-            } else if (*format == '*') {
-                int prec = va_arg(va, int);
-                if (prec >= 0) {
-                    precision = prec;
-                } else {
-                    flags &= ~FLAGS_PRECISION;
-                }
+            if (*format == '*') {
+                precision = va_arg(va, int);
                 format++;
+            } else {
+                precision = _atoi(&format);
             }
         }
 
@@ -679,7 +673,7 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
                 flags &= ~(FLAGS_PLUS | FLAGS_SPACE);
 
             // if a precision is specified, the 0 flags is ignored
-            if (flags & FLAGS_PRECISION)
+            if (precision >= 0)
                 flags &= ~FLAGS_ZEROPAD;
 
             // convert the integer
@@ -733,8 +727,7 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         case 'E':
         case 'a':
         case 'A': {
-            int prec = flags & FLAGS_PRECISION ? (int)precision : -1;
-            if (fmt_fp(buffer, va_arg(va, double), width, prec, flags, fmt) < 0)
+            if (fmt_fp(buffer, va_arg(va, double), width, precision, flags, fmt) < 0)
                 out(buffer, "<error>", 7);
             break;
         }
@@ -753,14 +746,13 @@ static int _vsnprintf(struct buf *buffer, const char *format, va_list va)
         case 's': {
             char *p = va_arg(va, char *);
             size_t l = strlen(p);
-            // pre padding
-            if (flags & FLAGS_PRECISION)
+            if (precision >= 0)
                 l = l < precision ? l : precision;
+            // pre padding
             if (!(flags & FLAGS_LEFT) && width > l)
                 out_pad(buffer, ' ', width - l);
             // string output
-            while (*p != 0 && (!(flags & FLAGS_PRECISION) || precision--))
-                outc(buffer, *(p++));
+            out(buffer, p, l);
             // post padding
             if ((flags & FLAGS_LEFT) && width > l)
                 out_pad(buffer, ' ', width - l);
