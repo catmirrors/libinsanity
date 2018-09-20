@@ -688,7 +688,7 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 case TYPE_SIZE:     val = va_arg(va, ptrdiff_t);        break;
                 default: assert(0);
                 }
-                ntoa_format(buffer, val > 0 ? val : -(uintmax_t)val, val < 0,
+                ntoa_format(buffer, val < 0 ? -(uintmax_t)val : val, val < 0,
                             base, precision, width, flags);
             } else {
                 // unsigned
