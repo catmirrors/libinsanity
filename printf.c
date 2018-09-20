@@ -740,8 +740,7 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
         }
 
         case 'p': {
-            width = sizeof(void *) * 2U;
-            flags |= FLAGS_ZEROPAD | FLAGS_UPPERCASE;
+            flags |= FLAGS_HASH;
             ntoa_format(buffer, (uintptr_t)va_arg(va, void *), false, 16,
                         precision, width, flags);
             break;

@@ -443,34 +443,19 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%.*d", -1, 1), "1");
 
     #if TEST_IMPL_DEFINED
-    cur_snprintf(buffer, sizeof(buffer), "%p", (void *)0x1234U);
-    if (sizeof(void *) == 4U)
-        REQUIRE_STR_EQ(buffer, "00001234");
-    else
-        REQUIRE_STR_EQ(buffer, "0000000000001234");
+    cur_snprintf(buffer, sizeof(buffer), "%p", (void *)(uintptr_t)0x1234U);
+    REQUIRE_STR_EQ(buffer, "0x1234");
 
-    cur_snprintf(buffer, sizeof(buffer), "%p", (void *)0x12345678U);
-    if (sizeof(void *) == 4U)
-        REQUIRE_STR_EQ(buffer, "12345678");
-    else
-        REQUIRE_STR_EQ(buffer, "0000000012345678");
+    cur_snprintf(buffer, sizeof(buffer), "%p", (void *)(uintptr_t)0x12345678U);
+    REQUIRE_STR_EQ(buffer, "0x12345678");
 
     cur_snprintf(buffer, sizeof(buffer), "%p-%p", (void *)0x12345678U,
-                 (void *)0x7EDCBA98U);
-    if (sizeof(void *) == 4U)
-        REQUIRE_STR_EQ(buffer, "12345678-7EDCBA98");
-    else
-        REQUIRE_STR_EQ(buffer, "0000000012345678-000000007EDCBA98");
+                 (void *)(uintptr_t)0x7EDCBA98U);
+    REQUIRE_STR_EQ(buffer, "0x12345678-0x7edcba98");
 
-    if (sizeof(uintptr_t) == sizeof(uint64_t)) {
-        cur_snprintf(buffer, sizeof(buffer), "%p",
-                     (void *)(uintptr_t)0xFFFFFFFFU);
-        REQUIRE_STR_EQ(buffer, "00000000FFFFFFFF");
-    } else {
-        cur_snprintf(buffer, sizeof(buffer), "%p",
-                     (void *)(uintptr_t)0xFFFFFFFFU);
-        REQUIRE_STR_EQ(buffer, "FFFFFFFF");
-    }
+    cur_snprintf(buffer, sizeof(buffer), "%p",
+                 (void *)(uintptr_t)0xFFFFFFFFU);
+    REQUIRE_STR_EQ(buffer, "0xffffffff");
     #endif
 
     buffer[0] = (char)0xA5;
