@@ -44,7 +44,7 @@
 
 #define REQUIRE_STR_EQ(got, expect) do {    \
     if (strcmp(got, expect)) {              \
-        printf("Got: '%s'\n", got);         \
+        printf("Got:      '%s'\n", got);    \
         printf("Expected: '%s'\n", expect); \
     }                                       \
     assert(!strcmp(got, expect));           \
@@ -52,7 +52,7 @@
 
 #define REQUIRE_INT_EQ(got, expect) do {    \
     if ((got) != (expect)) {                \
-        printf("Got: %d\n", got);           \
+        printf("Got:      %d\n", got);      \
         printf("Expected: %d\n", expect);   \
     }                                       \
     assert((got) == (expect));              \
