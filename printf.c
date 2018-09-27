@@ -62,7 +62,6 @@ enum {
     TYPE_SHORT,
     TYPE_LONG,
     TYPE_LLONG,
-    TYPE_PTRDIFF,
     TYPE_INTMAX,
     TYPE_SIZE,
     TYPE_PTR,
@@ -70,7 +69,8 @@ enum {
     TYPE_I64,
 };
 
-// If this fails, you need to adjust the corresponding va_arg() invocations.
+// If this fails, you need to adjust handling of all cases where ptrdiff_t is
+// used as signed version of size_t (and reverse).
 _Static_assert(sizeof(ptrdiff_t) == sizeof(size_t), "");
 
 struct buf {
@@ -628,15 +628,12 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             }
             break;
         case 't':
-            type = TYPE_PTRDIFF;
+        case 'z':
+            type = TYPE_SIZE; // assumption that size_t == unsigned ptrdiff_t
             format++;
             break;
         case 'j': ;
             type = TYPE_INTMAX;
-            format++;
-            break;
-        case 'z':
-            type = TYPE_SIZE;
             format++;
             break;
         case 'I':
@@ -653,10 +650,7 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 type = TYPE_CHAR;
                 format += 2;
             } else if (!(format[1] >= '0' && format[1] <= '9')) {
-                // MS extension for ptrdiff_t and size_t. The actual type
-                // depends on the sign. We assume ptridff_t and size_t are
-                // the same type anyway, just with different sign.
-                type = TYPE_SIZE;
+                type = TYPE_SIZE; // MS extension for ptrdiff_t and size_t
                 format += 1;
             }
             break;
@@ -710,7 +704,6 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 case TYPE_LONG:     val = va_arg(va, long);             break;
                 case TYPE_I64:      val = va_arg(va, int64_t);          break;
                 case TYPE_LLONG:    val = va_arg(va, long long);        break;
-                case TYPE_PTRDIFF:  val = va_arg(va, ptrdiff_t);        break;
                 case TYPE_INTMAX:   val = va_arg(va, intmax_t);         break;
                 case TYPE_SIZE:     val = va_arg(va, ptrdiff_t);        break;
                 default: assert(0);
@@ -728,7 +721,6 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 case TYPE_LONG:     val = va_arg(va, unsigned long);            break;
                 case TYPE_I64:      val = va_arg(va, uint64_t);                 break;
                 case TYPE_LLONG:    val = va_arg(va, unsigned long long);       break;
-                case TYPE_PTRDIFF:  val = va_arg(va, size_t);                   break;
                 case TYPE_INTMAX:   val = va_arg(va, uintmax_t);                break;
                 case TYPE_SIZE:     val = va_arg(va, size_t);                   break;
                 case TYPE_PTR:      val = (uintptr_t)va_arg(va, void *);        break;
