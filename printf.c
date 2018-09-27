@@ -65,6 +65,7 @@ enum {
     TYPE_PTRDIFF,
     TYPE_INTMAX,
     TYPE_SIZE,
+    TYPE_PTR,
 };
 
 // If this fails, you need to adjust the corresponding va_arg() invocations.
@@ -648,11 +649,12 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
         case 'u':
         case 'x':
         case 'X':
+        case 'p':
         case 'o':
         case 'b': {
             // set the base
             unsigned int base = 10U;
-            if (fmt == 'x' || fmt == 'X')
+            if (fmt == 'x' || fmt == 'X' || fmt == 'p')
                 base = 16U;
             else if (fmt == 'o')
                 base =  8U;
@@ -663,6 +665,11 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             // uppercase
             if (fmt == 'X')
                 flags |= FLAGS_UPPERCASE;
+
+            if (fmt == 'p') {
+                flags |= FLAGS_HASH;
+                type = TYPE_PTR;
+            }
 
             // if a precision is specified, the 0 flag is ignored
             if (precision >= 0)
@@ -697,6 +704,7 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 case TYPE_PTRDIFF:  val = va_arg(va, size_t);                   break;
                 case TYPE_INTMAX:   val = va_arg(va, uintmax_t);                break;
                 case TYPE_SIZE:     val = va_arg(va, size_t);                   break;
+                case TYPE_PTR:      val = (uintptr_t)va_arg(va, void *);        break;
                 default: assert(0);
                 }
                 flags &= ~(FLAGS_PLUS | FLAGS_SPACE);
@@ -741,13 +749,6 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             // post padding
             if ((flags & FLAGS_LEFT) && width > l)
                 out_pad(buffer, ' ', width - l);
-            break;
-        }
-
-        case 'p': {
-            flags |= FLAGS_HASH;
-            ntoa_format(buffer, (uintptr_t)va_arg(va, void *), false, 16,
-                        precision, width, flags);
             break;
         }
 
