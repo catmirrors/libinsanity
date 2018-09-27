@@ -66,6 +66,8 @@ enum {
     TYPE_INTMAX,
     TYPE_SIZE,
     TYPE_PTR,
+    TYPE_I32,
+    TYPE_I64,
 };
 
 // If this fails, you need to adjust the corresponding va_arg() invocations.
@@ -637,6 +639,27 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             type = TYPE_SIZE;
             format++;
             break;
+        case 'I':
+            if (format[1] == '6' && format[2] == '4') {
+                type = TYPE_I64;
+                format += 3;
+            } else if (format[1] == '3' && format[2] == '2') {
+                type = TYPE_I32;
+                format += 3;
+            } else if (format[1] == '1' && format[2] == '6') {
+                type = TYPE_SHORT;
+                format += 3;
+            } else if (format[1] == '8') {
+                type = TYPE_CHAR;
+                format += 2;
+            } else if (!(format[1] >= '0' && format[1] <= '9')) {
+                // MS extension for ptrdiff_t and size_t. The actual type
+                // depends on the sign. We assume ptridff_t and size_t are
+                // the same type anyway, just with different sign.
+                type = TYPE_SIZE;
+                format += 1;
+            }
+            break;
         default:
             break;
         }
@@ -681,9 +704,11 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 intmax_t val;
                 switch (type) {
                 case TYPE_NONE:     val = va_arg(va, int);              break;
+                case TYPE_I32:      val = va_arg(va, int32_t);          break;
                 case TYPE_CHAR:     val = (signed char)va_arg(va, int); break;
                 case TYPE_SHORT:    val = (short)va_arg(va, int);       break;
                 case TYPE_LONG:     val = va_arg(va, long);             break;
+                case TYPE_I64:      val = va_arg(va, int64_t);          break;
                 case TYPE_LLONG:    val = va_arg(va, long long);        break;
                 case TYPE_PTRDIFF:  val = va_arg(va, ptrdiff_t);        break;
                 case TYPE_INTMAX:   val = va_arg(va, intmax_t);         break;
@@ -697,9 +722,11 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
                 uintmax_t val;
                 switch (type) {
                 case TYPE_NONE:     val = va_arg(va, unsigned);                 break;
+                case TYPE_I32:      val = va_arg(va, uint32_t);                 break;
                 case TYPE_CHAR:     val = (unsigned char)va_arg(va, unsigned);  break;
                 case TYPE_SHORT:    val = (unsigned short)va_arg(va, unsigned); break;
                 case TYPE_LONG:     val = va_arg(va, unsigned long);            break;
+                case TYPE_I64:      val = va_arg(va, uint64_t);                 break;
                 case TYPE_LLONG:    val = va_arg(va, unsigned long long);       break;
                 case TYPE_PTRDIFF:  val = va_arg(va, size_t);                   break;
                 case TYPE_INTMAX:   val = va_arg(va, uintmax_t);                break;

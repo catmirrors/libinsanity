@@ -522,6 +522,20 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%" PRIi64, INT64_MIN), "-9223372036854775808");
     TEST_SNPRINTF(("%" PRIu64, UINT64_MAX), "18446744073709551615");
 
+    #if TEST_IMPL_DEFINED
+    // libinsanity/Microsoft extensions for explicitly sized integer types
+    TEST_SNPRINTF(("%I64d", INT64_MIN), "-9223372036854775808");
+    TEST_SNPRINTF(("%I32d", INT32_MIN), "-2147483648");
+    TEST_SNPRINTF(("%Id", (ptrdiff_t)-123), "-123");
+    TEST_SNPRINTF(("%Iu", (size_t)123), "123");
+    // libinsanity only extensions
+    TEST_SNPRINTF(("%I8u", 10000), "16");
+    TEST_SNPRINTF(("%I8d", 255), "-1");
+    TEST_SNPRINTF(("%I16u", 100000), "34464");
+    TEST_SNPRINTF(("%I16d", 65535), "-1");
+    TEST_SNPRINTF_N(("%I34d", 123), -1);
+    #endif
+
     TEST_SNPRINTF(("%x", 0), "0");
     TEST_SNPRINTF(("%#x", 0), "0");
     TEST_SNPRINTF(("%#04x", 0), "0000");
