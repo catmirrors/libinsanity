@@ -672,9 +672,12 @@ static void run_test(snprintf_type cur_snprintf)
         REQUIRE(j == 1024);
     }
 
-    // TODO
-    //TEST_SNPRINTF_N(("%.*u", 2147483647, 0), 2147483647);
-    //TEST_SNPRINTF_N(("%.*u ", 2147483647, 0), -1);
+    // Not all implementations handle this correctly (such as glibc). It also
+    // can be slow.
+    #if TEST_IMPL_DEFINED
+    TEST_SNPRINTF_N(("%.*u", 2147483647, 0), 2147483647);
+    TEST_SNPRINTF_N(("%.*u ", 2147483647, 0), -1);
+    #endif
 
     TEST_SNPRINTF_N(("%.4a", 1.0), 11);
 
