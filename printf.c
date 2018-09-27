@@ -98,10 +98,21 @@ static void out(struct buf *buf, const char *s, size_t l)
         buf->overflow = true;
 }
 
+static void pad(struct buf *f, char c, int w, int l, int fl)
+{
+    char pad[256];
+    if (fl & (FLAGS_LEFT | FLAGS_ZEROPAD) || l >= w)
+        return;
+    l = w - l;
+    memset(pad, c, l > sizeof pad ? sizeof pad : l);
+    for (; l >= sizeof pad; l -= sizeof pad)
+        out(f, pad, sizeof pad);
+    out(f, pad, l);
+}
+
 static void out_pad(struct buf *buf, char c, size_t l)
 {
-    while (l--)
-        outc(buf, c);
+    pad(buf, c, l, 0, 0);
 }
 
 // internal ASCII string to unsigned int conversion
@@ -201,18 +212,6 @@ static void ntoa_format(struct buf *buffer, uintmax_t value, bool negative,
 
     if ((flags & FLAGS_LEFT))
         out_pad(buffer, ' ', space_pad);
-}
-
-static void pad(struct buf *f, char c, int w, int l, int fl)
-{
-    char pad[256];
-    if (fl & (FLAGS_LEFT | FLAGS_ZEROPAD) || l >= w)
-        return;
-    l = w - l;
-    memset(pad, c, l > sizeof pad ? sizeof pad : l);
-    for (; l >= sizeof pad; l -= sizeof pad)
-        out(f, pad, sizeof pad);
-    out(f, pad, l);
 }
 
 static const char xdigits[16] = "0123456789ABCDEF";
