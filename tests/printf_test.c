@@ -697,7 +697,6 @@ static void run_test(snprintf_type cur_snprintf)
 
     #if TEST_IMPL_DEFINED
     int r = cur_snprintf(buffer, sizeof(buffer), "a%wb", &(int){0});
-    printf("%d '%s'\n", r, buffer);
     assert(r < 0);
     REQUIRE_STR_EQ(buffer, "a%w<error>b");
     #endif
