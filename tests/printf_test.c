@@ -669,7 +669,7 @@ static void run_test(snprintf_type cur_snprintf)
     {
         char b[2000];
         /* Perform ascii arithmetic to test printing tiny doubles */
-        int res = snprintf(b, sizeof(b), "%.1022f", 0x1p-1021);
+        int res = cur_snprintf(b, sizeof(b), "%.1022f", 0x1p-1021);
         REQUIRE(res == 1024);
         b[1] = '0';
         int i, k, j;
