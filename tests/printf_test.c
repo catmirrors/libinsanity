@@ -660,7 +660,7 @@ static void run_test(snprintf_type cur_snprintf)
     {
         char b[] = "xxxxxxxx";
         char *s = "%d";
-        int res = snprintf(b, 4, s, 123456);
+        int res = cur_snprintf(b, 4, s, 123456);
         REQUIRE(res == 6);
         REQUIRE_STR_EQ(b, "123");
         REQUIRE(b[5] == 'x'); // buffer overrun
