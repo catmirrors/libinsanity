@@ -29,7 +29,7 @@
 //      I8d  =>  int8_t
 //      Iu   => size_t
 //      Id   => ptrdiff_t
-//    (I32, I64 and I are likely compatible with Microsoft extensions)
+//    (I32, I64 and I are compatible with Microsoft extensions)
 __attribute__((format(printf, 3, 4)))
 int lin_snprintf(char *str, size_t size, const char *format, ...);
 
