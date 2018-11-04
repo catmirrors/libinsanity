@@ -41,6 +41,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <float.h>
+#include <stdio.h>
 
 #include "minmax.h"
 #include "printf.h"
@@ -768,6 +769,19 @@ static int vsnprintf_(struct buf *buffer, const char *format, va_list va)
             // post padding
             if ((flags & FLAGS_LEFT) && width > l)
                 out_pad(buffer, ' ', width - l);
+            break;
+        }
+
+        case 'r': {
+            const char *format_r = va_arg(va, char *);
+            struct lin_va_list args_r = va_arg(va, struct lin_va_list);
+            int rerr = 0;
+            va_list va_r;
+            va_copy(va_r, *args_r.ap);
+            rerr = vsnprintf_(buffer, format_r, va_r);
+            va_end(va_r);
+            if (!err)
+                err = rerr;
             break;
         }
 

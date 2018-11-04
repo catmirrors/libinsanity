@@ -30,10 +30,26 @@
 //      Iu   => size_t
 //      Id   => ptrdiff_t
 //    (I32, I64 and I are compatible with Microsoft extensions)
+//  - Limited support for %r. %r works like a recursive, inline vsnprintf().
+//    it takes two arguments: const char* (format), LIN_VA_LIST (args).
+//    LIN_VA_LIST is a wrapped va_list (because va_list can be an array type).
+//     %r will insert the result of vsnprintf(..., ..., format, args).
+//    Always use LIN_VA_LIST() to wrap the va_list; if %r is ever standardized,
+//    it may be possible to remove struct lin_va_list and pass va_list directly.
+//    The underlying va_list is copied with va_copy and is not modified.
+//    Using this format introduces recursion; be careful of the nesting depth.
+//    The main use of this feature is that you can avoid having to provide v*
+//    functions (that take va_list directly) to printf-like functions.
 __attribute__((format(printf, 3, 4)))
 int lin_snprintf(char *str, size_t size, const char *format, ...);
 
 // See lin_snprintf().
 int lin_vsnprintf(char *str, size_t size, const char *format, va_list ap);
+
+struct lin_va_list {
+    va_list *ap;
+};
+
+#define LIN_VA_LIST(x) ((struct lin_va_list){&(x)})
 
 #endif

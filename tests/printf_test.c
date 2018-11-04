@@ -88,6 +88,21 @@
 __attribute__((format(printf, 3, 4)))
 typedef int (*snprintf_type)(char *str, size_t size, const char *format, ...);
 
+#if TEST_IMPL_DEFINED
+__attribute__((format(printf, 4, 6)))
+static void test_rprintf(snprintf_type cur_snprintf, char *buf, size_t buf_sz,
+                         const char *fmt1, const char *fmt2, ...)
+{
+    va_list ap;
+    va_start(ap, fmt2);
+    // (the test is slightly convoluted with using ap two times to test that
+    // ap does not need to be va_copy-d by the caller)
+    cur_snprintf(buf, buf_sz, "<start>%r<mid>%r<end>",
+                 fmt1, LIN_VA_LIST(ap), fmt2, LIN_VA_LIST(ap));
+    va_end(ap);
+}
+#endif
+
 static void run_test(snprintf_type cur_snprintf)
 {
     char buffer[200];
@@ -699,6 +714,12 @@ static void run_test(snprintf_type cur_snprintf)
     int r = cur_snprintf(buffer, sizeof(buffer), "a%wb", &(int){0});
     assert(r < 0);
     REQUIRE_STR_EQ(buffer, "a%w<error>b");
+    #endif
+
+    #if TEST_IMPL_DEFINED
+    test_rprintf(cur_snprintf, buffer, sizeof(buffer), "%s_%s", "%s:%.3s",
+                 "hello", "world");
+    REQUIRE_STR_EQ(buffer, "<start>hello_world<mid>hello:wor<end>");
     #endif
 
     printf("All tests succeeded.\n");
