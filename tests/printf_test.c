@@ -456,6 +456,7 @@ static void run_test(snprintf_type cur_snprintf)
     TEST_SNPRINTF(("%ju", (uintmax_t)2147483647UL), "2147483647");
 
     TEST_SNPRINTF(("%.*d", -1, 1), "1");
+    TEST_SNPRINTF(("%.*d", -1, 0), "0");
 
     TEST_SNPRINTF(("%hhd", -1), "-1");
 
